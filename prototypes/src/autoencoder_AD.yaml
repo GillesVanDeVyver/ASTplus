@@ -1,0 +1,17 @@
+dev_directory: ../dev_data
+eval_directory: ../eval_data
+model_directory: ./model
+result_directory: ./result
+result_file: result.csv
+
+max_fpr: 0.1
+decision_threshold: 0.9
+
+ast_embedding_size: 768
+
+fit:
+  lr: 0.000005
+  epochs: 1000
+  shuffle: True
+  validation_split: 0.1
+  verbose: 1

@@ -1,0 +1,12 @@
+dev_directory: ../dev_data
+eval_directory: ../eval_data
+model_directory: ./model
+result_directory: ./result
+result_file: result.csv
+
+max_fpr: 0.1
+
+ast_embedding_size: 768
+
+fit:
+  epsilon: 0.1
