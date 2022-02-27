@@ -3,12 +3,15 @@ import numpy as np
 import yaml as yaml
 import ADAST
 import pandas as pd
-from ASD_ASTplus.Gilles.utilities import common
+import common
 import csv
 import keras_model_ae
 from sklearn import metrics
 from pathlib import Path
 import visualizer
+
+
+
 
 
 ########################################################################
@@ -17,8 +20,12 @@ import visualizer
 
 with open("autoencoder_AD.yaml") as stream:
     param = yaml.safe_load(stream)
-
-
+"""
+model = keras_model_ae.get_model(param["ast_embedding_size"],
+                              param["fit"]["lr"])
+model.summary()
+print(1)
+"""
 result_dir="./results/autoencoder_extra/lr="+str(param["fit"]["lr"])+"_nbEpochs="+\
                              str(param["fit"]["epochs"])+"/"
 

@@ -20,7 +20,11 @@ from torch import nn
 import numpy as np
 import pickle
 from torch.cuda.amp import autocast,GradScaler
-import ASTAE_model
+import pureAttentionAE
+import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
+import tensorflow as tf
+from sklearn import metrics
 
 
 """
@@ -29,8 +33,42 @@ Some parts are taken from AST: https://github.com/YuanGongND/ast
     parts copied from AST are annotated with #AST
 """
 
+def custom_plot(epochs, loss,figname,debug):
+    plt.plot(epochs, loss)
+    if debug:
+        plt.savefig("debug_results/"+figname+".png")
+    else:
+        plt.savefig("results/"+figname+".png")
 
-def train(audio_model, input_base_directory, batch_size, lr,lr_patience=10,n_epochs=1,verbose=True):
+def calc_AUC(X,labels,loss_fn,log=True,tb=None,epoch=None,debug=False):
+    if log and tb==None:
+        raise Exception("no tensorboard to log to given")
+    if log and tb==None:
+        raise Exception("no epoch given for logging")
+    mse = []
+    if debug:
+        X = X[:6]
+        labels = labels[:6]
+    for sample in X:
+        with autocast():
+            sample = torch.unsqueeze(sample, dim=0)
+            sample_output,sample_lin_proj_output = audio_model(sample.detach())
+            sample_output = sample_output.detach()
+            sample_lin_proj_output = sample_lin_proj_output.detach()
+            sample_loss = loss_fn(sample_output, sample_lin_proj_output)
+        mse.append(sample_loss.item())
+    auc = metrics.roc_auc_score(labels, mse)
+    if log:
+        tb.add_scalar('AUC_scores/source', auc, epoch)
+    return auc
+
+
+
+def train(version,model_title,audio_model, input_base_directory, batch_size, lr,lr_patience=10,n_epochs=1,verbose=True,debug=False):
+
+
+
+
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print('running on ' + str(device))
@@ -41,7 +79,7 @@ def train(audio_model, input_base_directory, batch_size, lr,lr_patience=10,n_epo
     # Set up the optimizer #AST
     trainables = [p for p in audio_model.parameters() if p.requires_grad]
     print('Total trainable parameter number is : {:.3f} million'.format(sum(p.numel() for p in trainables) / 1e6))
-    optimizer = torch.optim.Adam(trainables, lr, weight_decay=5e-7, betas=(0.95, 0.999))
+    optimizer = torch.optim.Adam(trainables, lr, weight_decay=5e-7, betas=(0.95, 0.999)) #AST
 
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=lr_patience,
                                                            #verbose=verbose) #AST
@@ -51,33 +89,57 @@ def train(audio_model, input_base_directory, batch_size, lr,lr_patience=10,n_epo
     # for amp # AST
     scaler = GradScaler()
 
-    batch_size=1
 
 
-    global_step, epoch = 0, 0
+    global_step, epoch = 0, 1
     result = np.zeros([n_epochs, 10])
     audio_model.train()
 
-    dataframes_base_directory = "../../dev_data_dataframes/"
+    #dataframes_base_directory = "../../dev_data_dataframes/"
     #for machine in os.listdir(dataframes_base_directory):
-    machine = "debug_sample"
+    machine = "fan"
 
     dataframe_dir = input_base_directory + machine+"/"
     print(dataframe_dir)
-    temp = dataframe_dir+"train/dataframe.pt"
-    X_train = torch.load(temp)
+    train_location = dataframe_dir+"train/dataframe.pt" #labels unecessary: all normal
+    validation_source_location = dataframe_dir+"source_test/dataframe.pt"
+    validation_source_labels_location = dataframe_dir+"source_test/labels.pt"
+    validation_target_location = dataframe_dir+"target_test/dataframe.pt"
+    validation_target_labels_location = dataframe_dir+"target_test/labels.pt"
+
+    X_train = torch.load(train_location)
+    X_validation_source = torch.load(validation_source_location)
+    X_validation_source_labels = torch.load(validation_source_labels_location)
+    #X_validation_target = torch.load(validation_target_location)
+    #X_validation_target_labels = torch.load(validation_target_labels_location)
+
+
     #X_train.to(device, non_blocking=True)
 
     nb_batches = round(len(X_train)/batch_size)
+
+    title = "DCASE21_"+model_title+"_"+machine+"_"+version
+
+    tb = SummaryWriter("runs/"+machine+"/"+title)
+    sample_input = X_train[0:batch_size]
+    tb.add_graph(audio_model,sample_input)
+
+    train_loss_vals=  []
 
     while epoch < n_epochs + 1:
         print('---------------')
         print(datetime.datetime.now())
         print("current #epochs=%s, #steps=%s" % (epoch, global_step))
         pos = 0
+        epoch_loss= []
+        if debug:
+            nb_batches = 2
+
+
+        audio_model .train()
         for i in range(nb_batches):
-            print(i)
-            temp = len(X_train)
+            if (i%100 == 0):
+                print(i)
             if (pos + batch_size>len(X_train)):
                 X_batch = X_train[pos:]
             else:
@@ -89,26 +151,45 @@ def train(audio_model, input_base_directory, batch_size, lr,lr_patience=10,n_epo
                 audio_output,lin_proj_output = audio_model(X_batch)
                 loss = loss_fn(audio_output, lin_proj_output)
 
+
             optimizer.zero_grad()
             if device=="cuda":
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
-
-            loss.backward()
+            else:
+                loss.backward()
+                optimizer.step()
+            epoch_loss.append(loss.item())
 
             global_step += 1
+        avg_epoch_loss=sum(epoch_loss)/len(epoch_loss)
+        train_loss_vals.append(avg_epoch_loss)
+        tb.add_scalar('Loss/train', avg_epoch_loss, epoch)
 
         scheduler.step()
         epoch += 1
 
+        audio_model.eval() # log validation accuracy during training (and without interfering with training)
+
+        calc_AUC(X_validation_source,X_validation_source_labels,loss_fn,log=True,tb=tb,epoch=epoch,debug=debug)
+        #calc_AUC(X_validation_target,X_validation_target_labels,loss_fn,log=True,tb=tb,epoch=epoch,debug=debug)
+
+
+
+    #figname = "DCASE21_"+machine+"_"+version+"_train"
+    #custom_plot(np.linspace(1, n_epochs, n_epochs).astype(int), train_loss_vals, figname,debug)
+    #for n_iter in range(100):
+     #   tb.add_scalar('Loss/train', np.random.random(), n_iter)
+    if not debug:
+        torch.save(audio_model.state_dict(), "trained_models/"+title+".pt")
+
+    tb.close()
 
 
 #TODO
 """
-- Add decoder block
-- Run on server instead to avoid out of memory problems
-- adjust hyper parameters
+- adjust hyper parameters?
 - put hyper parameters in yaml file
 
 extras not taken over from AST
@@ -116,12 +197,23 @@ extras not taken over from AST
 -> save intermediate progress
 """
 
+server = False
 
-audio_model = ASTAE_model.ASTAEModel()
-input_base_directory = "../../dev_data_dataframes/"
+audio_model = pureAttentionAE.pureAttenionModel()
+model_title = "pure_attention"
+
+
+if server:
+    input_base_directory = "../../dev_data_dataframes_server/"
+else:
+    input_base_directory = "../../dev_data_dataframes/"
+
+
 lr = 0.000005
-batch_size=1
-train(audio_model, input_base_directory, batch_size, lr,lr_patience=10,n_epochs=2,verbose=True)
+batch_size=12 # AST
+version = "O.2"
+train(version,model_title,audio_model, input_base_directory, batch_size, lr,lr_patience=10,n_epochs=2,verbose=True,
+      debug=True)
 
 
 """
@@ -136,3 +228,5 @@ temp_test = X_train = torch.load(temp)
 
 print(len(temp_test))
 """
+
+#plot_loss([1, 2, 3, 4, 5], [100, 90, 60, 30, 10],figname="test")

@@ -7,7 +7,7 @@ import torch
 grandparentdir = str(os.path.abspath(os.path.join(__file__, "../../../../../")))
 print(grandparentdir)
 sys.path.append(grandparentdir)
-from ASD_ASTplus.Gilles.utilities import common
+import common
 import pandas as pd
 
 # ADAST: Anomaly Detector AST
@@ -76,7 +76,7 @@ def generate_lables_and_pd_dataframe(input_directory,format="one_class_svm",cust
 
 
 # generate intermediate tensors and store as .pt files
-
+"""
 adast_mdl = adast()
 base_directory="../../dev_data/"
 output_base_directory="../dev_data_embeddings/"
@@ -91,7 +91,7 @@ for machine in os.listdir(base_directory):
                 output_location = output_directory + sample_name + ".pt"
                 adast_mdl.generate_and_save_embeddings(file_location, output_location)
         print(machine+" "+domain+" done")
-
+"""
 
 
 

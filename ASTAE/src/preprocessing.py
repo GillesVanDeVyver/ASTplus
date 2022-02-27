@@ -53,20 +53,30 @@ def generate_dataframes(input_base_directory,output_base_directory):
 
 
 
-
-raw_audio_base_directory="../../dev_data/"
+#local versions
+#raw_audio_base_directory="../../dev_data/"
 #raw_audio_base_directory="../../dev_sample/"
 
-spectrograms_base_directory="../../dev_data_spectrograms/"
+#server version
+raw_audio_base_directory="../../../../../../data/zhaoyi/21/Dev21/"
+
+
+
+#spectrograms_base_directory="../../dev_data_spectrograms/"
 #spectrograms_base_directory="../../dev_sample_spectrograms/"
 
+spectrograms_base_directory="../../dev_data_spectrograms_server/"
 
 
-dataframes_base_directory="../../dev_data_dataframes/"
+
+#dataframes_base_directory="../../dev_data_dataframes/"
 #dataframes_base_directory="../../dev_sample_dataframes/"
 
+dataframes_base_directory="../../dev_data_dataframes_server/"
+
+
 #generate_spectrograms(raw_audio_base_directory,spectrograms_base_directory)
-#generate_dataframes(spectrograms_base_directory,dataframes_base_directory)
-test=torch.load("../../dev_sample_dataframes/debug_sample/train/dataframe.pt")
-test2=torch.load("../../dev_data_dataframes/fan/train/dataframe.pt")
-test2
+generate_dataframes(spectrograms_base_directory,dataframes_base_directory)
+#test=torch.load("../../dev_sample_dataframes/debug_sample/train/dataframe.pt")
+#test2=torch.load("../../dev_data_dataframes/fan/train/dataframe.pt")
+#print(test2)
