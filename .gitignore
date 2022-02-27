@@ -2,3 +2,11 @@
 /dev_data_dataframes
 /dev_data_spectrograms
 /pretrained_models
+/dev_data_spectrograms_server
+/dev_data_dataframes_server
+/prototypes/src/__pycache__/keras_model_ae.cpython-38.pyc
+/prototypes/src/__pycache__/visualizer.cpython-38.pyc
+/prototypes/src/models/__pycache__/__init__.cpython-38.pyc
+/prototypes/src/models/__pycache__/ast_models.cpython-38.pyc
+
+ASTAE/src/__pycache__/
