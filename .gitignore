@@ -10,3 +10,7 @@
 /prototypes/src/models/__pycache__/ast_models.cpython-38.pyc
 
 ASTAE/src/__pycache__/
+
+ASTAE/src/ast_model/__pycache__/
+
+*.pyc
