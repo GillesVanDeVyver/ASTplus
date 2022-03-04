@@ -72,7 +72,7 @@ def generate_roc_curve(y,labels,title):
     common.generate_ROC_curve(fpr_source, tpr_source, ROC_location_source)
 
 
-def train(version,model_title,audio_model, input_base_directory, batch_size, lr,lr_patience=10,n_epochs=1,verbose=True,debug=False):
+def train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=10,n_epochs=1,verbose=True,debug=False):
 
 
 
@@ -85,9 +85,18 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr,
     audio_model = audio_model.to(device)
 
     # Set up the optimizer #AST
-    trainables = [p for p in audio_model.parameters() if p.requires_grad]
-    print('Total trainable parameter number is : {:.3f} million'.format(sum(p.numel() for p in trainables) / 1e6))
-    optimizer = torch.optim.Adam(trainables, lr, weight_decay=5e-7, betas=(0.95, 0.999)) #AST
+    trainables_encoder = [p for p in audio_model.encoder.parameters() if p.requires_grad]
+    trainables_decoder = [p for p in audio_model.decoder.parameters() if p.requires_grad]
+
+    print('Number of trainable parameters encoder is : {:.3f} million'.format(sum(p.numel() for p in trainables_encoder) / 1e6))
+    print('Number of trainable parameters decoder is : {:.3f} million'.format(sum(p.numel() for p in trainables_decoder) / 1e6))
+
+
+    optimizer = torch.optim.Adam(
+        [{'params': trainables_encoder, 'lr': lr_encoder},
+        {'params': trainables_decoder, 'lr': lr_decoder}],
+        weight_decay=5e-7, betas=(0.95, 0.999)
+    ) #AST
 
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=lr_patience,
                                                            #verbose=verbose) #AST
@@ -233,7 +242,7 @@ extras not taken over from AST
 
 server = True
 
-audio_model = attention_linear.attention_linear_model(depth_encoder=1, trainable_encoder=False,avg=True)
+audio_model = attention_linear.attention_linear_model(depth_encoder=1, trainable_encoder=True,avg=True,depth_decoder=1)
 model_title = "attention_linear"
 
 
@@ -244,10 +253,12 @@ else:
 
 
 
-lr = 0.000005
+lr_encoder = 0.0005
+lr_decoder = 0.05
+
 batch_size=12 # AST
-version = "4.0"
-train(version,model_title,audio_model, input_base_directory, batch_size, lr,lr_patience=10,n_epochs=200,verbose=True,
+version = "4.2"
+train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=10,n_epochs=200,verbose=True,
       debug=True)
 
 
