@@ -20,3 +20,7 @@ ASTAE/src/ast_model/__pycache__/
 ASTAE/src/trained_models/
 
 prototypes/src/results/autoencoder_extra/lr=5e-06_nbEpochs=1000/AUC_scores_AE_lr=5e-06_nbEpochs=1000.csv
+
+ASTAE/src/results/
+
+ASTAE/src/runs/

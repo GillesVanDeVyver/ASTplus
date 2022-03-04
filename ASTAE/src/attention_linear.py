@@ -11,7 +11,8 @@ import timm
 from timm.models.layers import to_2tuple, trunc_normal_,StdConv2dSame, DropPath, trunc_normal_
 from torch.cuda.amp import autocast
 from functools import partial
-
+import copy
+import collections
 
 
 def pretrained_AST(input_tdim = 1024):
@@ -29,7 +30,15 @@ def pretrained_AST(input_tdim = 1024):
     #audio_model.load_state_dict(sd, strict=False)
     return audio_model_ast
 
-
+def average_layers(output_model,models):
+    state_dicts = []
+    new_state_dict = collections.OrderedDict()
+    for model in models:
+        state_dicts.append(copy.deepcopy(model.state_dict()))
+    for key in output_model.state_dict():
+        param = torch.mean(torch.stack([sd[key] for sd in state_dicts]), dim=0)
+        new_state_dict[key] = param
+    output_model.load_state_dict(new_state_dict)
 
 
 """
@@ -37,28 +46,25 @@ Many parts are taken from AST: https://github.com/YuanGongND/ast
     parts copied from AST are annotated with #AST
 and from ViT: timm.ast_model.vision_transformer.
     parts copied from ViT are annotated with #ViT
-These modules only allow coarse selection of size (e.g. minimum of layers = 4).
+These modules only allow coarse selection of size (e.g. minimum of heads = 4).
 The model is also different because we don't do classification.
 This is why we don't use these modules directly, but copy the relevant parts instead.
-Another source of inspiration is 'Attention is all you need' directly,
-with code examples from https://nlp.seas.harvard.edu/2018/04/03/attention.html#full-model
 """
 
 class Mlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+    def __init__(self,in_features, out_features=None, act_layer=nn.GELU, drop=0.,requires_grad=True):
         super().__init__()
         out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.lin = nn.Linear(in_features, out_features)
         self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
+        if requires_grad:
+            self.lin.requires_grad_(True)
+
 
     def forward(self, x):
-        x = self.fc1(x)
+        x = self.lin(x)
         x = self.act(x)
-        x = self.drop(x)
-        x = self.fc2(x)
         x = self.drop(x)
         return x
 
@@ -105,52 +111,47 @@ class Self_attention(Attention):
         super().forward(x,x,x,None)
         return x
 
-class Encoder_block(nn.Module): #ViT
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+class Encoder(nn.Module):
+
+    def __init__(self,depth_encoder,vit,trainable_encoder,avg=False):
         super().__init__()
-        self.norm1 = norm_layer(dim)
-        self.attn = Self_attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
-        # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        if avg:
+            averaged_encoder = copy.deepcopy(vit.blocks[0])
+            average_layers(averaged_encoder,vit.blocks)
+            self.encoderBlocks = torch.nn.ModuleList([averaged_encoder])
+        else:
+            self.encoderBlocks = vit.blocks[:depth_encoder]
+
+        if trainable_encoder:
+            self.encoderBlocks.requires_grad_(True)
+        self.vit = vit
+
+
+
 
     def forward(self, x):
-        x = x + self.drop_path(self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        for blk in self.encoderBlocks: #AST
+            x = blk(x) #AST
+        x = self.vit.norm(x) #AST
         return x
 
-class Decoder_block(nn.Module):
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+class Decoder(nn.Module):
+
+    def __init__(self,depth_decoder,feature_size,act_layer=nn.GELU,drop=0.,requires_grad=True):
         super().__init__()
-        self.norm1 = norm_layer(dim)
-        self.attn = Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
-        self.self_attn = Self_attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
-    def forward(self, x,memory,mask):
-        x= self.norm1(x)
-        x = x + self.drop_path(self.attn())
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        self.layers = [Mlp(feature_size, feature_size, act_layer, drop,requires_grad) for i in range(depth_decoder)]
+        self.layers = torch.nn.ModuleList(self.layers)
 
-        x = x + self.drop_path(self.attn(x,memory,memory,mask))
-
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
         return x
 
 
-class pureAttenionModel(nn.Module):
+class attention_linear_model(nn.Module):
     """
     The AST AutoEncoder model.
     :param fstride: the stride of patch spliting on the frequency dimension, for 16*16 patchs,
@@ -160,20 +161,15 @@ class pureAttenionModel(nn.Module):
     :param input_fdim: the number of frequency bins of the input spectrogram
     :param input_tdim: the number of time frames of the input spectrogram
     :param depth_encoder: the number of blocks in the encoder
-    :param depth_decoder: the number of blocks in the decoder
-    :param num_heads_encoder: the number of heads in the encoder
-    :param num_heads_decoder: the number of heads in the decoder
-
-    """
+    :param depth_decoder: the number of layers in the decoder    """
 
     def __init__(self, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, depth_encoder=1,
-                 depth_decoder=1,num_heads_encoder=4,num_heads_decoder=4,drop_rate=0., mlp_ratio=4.,
-                 qkv_bias=True,qk_scale=None,attn_drop_rate=0.,drop_path_rate=0.,norm_layer=None,verbose=True):
+                 depth_decoder=1,verbose=True, trainable_encoder = False,avg=False):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #device = "cpu"
 
 
-        super(pureAttenionModel, self).__init__()
+        super(attention_linear_model, self).__init__()
         assert timm.__version__ == '0.4.5', 'From AST model, not sure if really necessary'  # AST
 
 
@@ -182,9 +178,9 @@ class pureAttenionModel(nn.Module):
         if verbose == True:
             print('---------------AST Model Summary---------------')
             print('NETWORK SIZE:\n '
-                  'encoder: depth {:d} with {:d} heads '
-                  'decoder: depth {:d} with {:d} heads'
-                  .format(depth_encoder,num_heads_encoder,depth_decoder, num_heads_decoder))
+                  'encoder: depth {:d}'
+                  'decoder: depth {:d}'
+                  .format(depth_encoder,depth_decoder))
 
         # automatically get the intermediate shape # AST
         self.embed_dim=768
@@ -202,17 +198,19 @@ class pureAttenionModel(nn.Module):
         #self.AST_model.v.to(device)
         self.patch_embed = self.AST_model.v.patch_embed
         self.patch_embed.requires_grad_(False)  # first prototype lin projection layer is untrained
-
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, self.embed_dim))  # ViT
+        temp = self.AST_model.v.pos_embed
+        self.pos_embed = nn.Parameter(self.AST_model.v.pos_embed[:,:-2,:]) # -2 as the model doesn't use distillation or class token
+        #self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, self.embed_dim))  # ViT
         self.pos_embed.requires_grad_(False)
 
-        norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6) #ViT
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth_encoder)]  # stochastic depth decay rule # vIt
+        #norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6) #ViT
+        #dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth_encoder)]  # stochastic depth decay rule # vIt
         #self.encoderBlocks = self.AST_model.v.blocks
-        self.encoderBlocks = self.AST_model.v.blocks[:depth_encoder]
-        self.decoderBlocks = self.AST_model.v.blocks[depth_encoder:depth_encoder+depth_decoder]
-        self.encoderBlocks.requires_grad_(True)
-        self.decoderBlocks.requires_grad_(True)
+
+        self.encoder = Encoder(depth_encoder,self.AST_model.v,trainable_encoder,avg)
+
+        self.decoder = Decoder(depth_decoder,self.embed_dim,act_layer=nn.GELU,drop=0.)
+        self.decoder.requires_grad_(True)
 
         """
         self.encoderBlocks = nn.ModuleList([
@@ -256,11 +254,10 @@ class pureAttenionModel(nn.Module):
         x = x + self.pos_embed #AST # dim (batch_size,nb_patches ,embedding dimension ), e.g., (32, 1212, 768)
         lin_proj_output = x.clone()
         #x = self.pos_drop(x) #AST  # we don't do dropout because pos embed is not trainable
-        for blk in self.encoderBlocks: #AST
-            x = blk(x) #AST
-        for decoder_blk in self.decoderBlocks: #AST
-            x = decoder_blk(x) #AST
-        x = self.AST_model.v.norm(x) #AST
+        x = self.encoder(x)
+        x = self.decoder(x)
+
+
 
 
         return x,lin_proj_output
