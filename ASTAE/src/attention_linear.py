@@ -15,7 +15,7 @@ import copy
 import collections
 
 
-def pretrained_AST(input_tdim = 1024):
+def pretrained_AST(input_tdim = 1024, audioset_only = False):
     pretrained_mdl_path = '../../pretrained_models/audioset_10_10_0.4593.pth'
     # get the frequency and time stride of the pretrained model from its name
     fstride, tstride = int(pretrained_mdl_path.split('/')[-1].split('_')[1]), int(pretrained_mdl_path.split('/')[-1].split('_')[2].split('.')[0])
@@ -23,8 +23,10 @@ def pretrained_AST(input_tdim = 1024):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #device = "cpu"
     print("device: "+ str(device))
-    sd = torch.load(pretrained_mdl_path, map_location=device)
+    #sd = torch.load(pretrained_mdl_path, map_location=device)
     #audio_model_ast = ast_model.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride,model_size='tiny224')
+    if audioset_only:
+        pretrained_mdl_path = '../../audio-transformer/scv2/checkpoint-75.pth'
     audio_model_ast = ast_model.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride)
     #audio_model = torch.nn.DataParallel(audio_model_ast)
     #audio_model.load_state_dict(sd, strict=False)
@@ -164,7 +166,7 @@ class attention_linear_model(nn.Module):
     :param depth_decoder: the number of layers in the decoder    """
 
     def __init__(self, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, depth_encoder=1,
-                 depth_decoder=1,verbose=True, trainable_encoder = False,avg=False):
+                 depth_decoder=1,verbose=True, trainable_encoder = False,avg=False,audioset_only=False):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #device = "cpu"
 
@@ -192,7 +194,7 @@ class attention_linear_model(nn.Module):
 
         # the linear projection layer
         print("device: "+ str(device))
-        self.AST_model = pretrained_AST()
+        self.AST_model = pretrained_AST(audioset_only=audioset_only)
         self.AST_model.requires_grad_(False)
         print("device: "+ str(device))
         #self.AST_model.v.to(device)
@@ -247,17 +249,23 @@ class attention_linear_model(nn.Module):
         x = x.unsqueeze(1)  # dim (batch_size, 1, time_frame_num, frequency_bins), e.g., (32, 1, 1024, 128)
         x = x.transpose(2, 3)  # dim (batch_size, 1, frequency_bins,time_frame_num, ), e.g., (32, 1, 128, 1024)
 
+        B = x.shape[0]
         # untrained patch embed layer
-        x = self.patch_embed(x)
+        x = self.AST_model.v.patch_embed(x)
+        cls_tokens = self.AST_model.v.cls_token.expand(B, -1, -1)
+        dist_token = self.AST_model.v.dist_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, dist_token, x), dim=1)
 
 
-        x = x + self.pos_embed #AST # dim (batch_size,nb_patches ,embedding dimension ), e.g., (32, 1212, 768)
+
+        x = x + self.AST_model.v.pos_embed #AST # dim (batch_size,nb_patches ,embedding dimension ), e.g., (32, 1212, 768)
         lin_proj_output = x.clone()
+        lin_proj_output=(lin_proj_output[:, 0] + lin_proj_output[:, 1]) / 2
         #x = self.pos_drop(x) #AST  # we don't do dropout because pos embed is not trainable
         x = self.encoder(x)
         x = self.decoder(x)
 
-
+        x = (x[:, 0] + x[:, 1]) / 2
 
 
         return x,lin_proj_output

@@ -54,25 +54,25 @@ def generate_dataframes(input_base_directory,output_base_directory):
 
 
 #local versions
-#raw_audio_base_directory="../../dev_data/"
+raw_audio_base_directory="../../dev_data/"
 #raw_audio_base_directory="../../dev_sample/"
 
 #server version
-raw_audio_base_directory="../../../../../../data/zhaoyi/21/Dev21/"
+#raw_audio_base_directory="../../../../../../data/zhaoyi/21/Dev21/"
 
 
 
-#spectrograms_base_directory="../../dev_data_spectrograms/"
+spectrograms_base_directory="../../dev_data_spectrograms/"
 #spectrograms_base_directory="../../dev_sample_spectrograms/"
 
-spectrograms_base_directory="../../dev_data_spectrograms_server/"
+#spectrograms_base_directory="../../dev_data_spectrograms_server/"
 
 
 
-#dataframes_base_directory="../../dev_data_dataframes/"
+dataframes_base_directory="../../dev_data_dataframes/"
 #dataframes_base_directory="../../dev_sample_dataframes/"
 
-dataframes_base_directory="../../dev_data_dataframes_server/"
+#dataframes_base_directory="../../dev_data_dataframes_server/"
 
 
 #generate_spectrograms(raw_audio_base_directory,spectrograms_base_directory)

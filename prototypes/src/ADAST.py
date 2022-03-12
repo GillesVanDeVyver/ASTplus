@@ -12,7 +12,7 @@ import pandas as pd
 
 # ADAST: Anomaly Detector AST
 class adast(): # anomaly detection ast_model
-    def __init__(self,input_tdim = 1024,num_mel_bins=128,embedding_dimension=768):
+    def __init__(self,input_tdim = 1024,num_mel_bins=128,embedding_dimension=768,full_output=False):
         # audioset input sequence length is 1024
         pretrained_mdl_path = '../../pretrained_models/audioset_10_10_0.4593.pth'
         # get the frequency and time stride of the pretrained model from its name
@@ -24,24 +24,30 @@ class adast(): # anomaly detection ast_model
         #device = torch.device("cuda")
         torch.cuda.empty_cache()
         print("cache cleared")
+        print(device)
         sd = torch.load(pretrained_mdl_path, map_location=device)
-        audio_model_ast = models.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride)
+        if full_output:
+            audio_model_ast = models.ASTModel_full(input_tdim=input_tdim, fstride=fstride, tstride=tstride)
+        else:
+            audio_model_ast = models.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride)
         self.audio_model = torch.nn.DataParallel(audio_model_ast)
         self.audio_model.load_state_dict(sd, strict=False)
         self.num_mel_bins=num_mel_bins
         self.embedding_dimension=embedding_dimension
 
 
-    def get_ast_embedding_single_file(self,file_location):
+    def get_ast_embedding_single_file(self,file_location,device):
         log_mel = common.convert_to_log_mel(file_location, num_mel_bins=self.num_mel_bins, target_length=self.input_tdim)
         input = torch.unsqueeze(log_mel, dim=0)
         #input = torch.rand([1, self.input_tdim, 128])
+        input=input.to(device)
+        self.audio_model=self.audio_model.to(device)
         output = self.audio_model(input)
         return output
 
 
-    def generate_and_save_embeddings(self,input_location,output_location):
-        output = self.get_ast_embedding_single_file(input_location)
+    def generate_and_save_embeddings(self,input_location,output_location,device):
+        output = self.get_ast_embedding_single_file(input_location,device)
         torch.save(output,output_location)
 
 
@@ -76,10 +82,15 @@ def generate_lables_and_pd_dataframe(input_directory,format="one_class_svm",cust
 
 
 # generate intermediate tensors and store as .pt files
-"""
-adast_mdl = adast()
+full_output = True
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+adast_mdl = adast(full_output=full_output)
 base_directory="../../dev_data/"
-output_base_directory="../dev_data_embeddings/"
+if full_output:
+    output_base_directory="../dev_data_embeddings_full/"
+else:
+    output_base_directory="../dev_data_embeddings/"
 for machine in os.listdir(base_directory):
     for domain in os.listdir(base_directory+"/"+machine):
         input_directory = base_directory + machine + "/" + domain
@@ -89,14 +100,14 @@ for machine in os.listdir(base_directory):
                 file_location = os.path.join(input_directory, filename)
                 sample_name = os.path.splitext(file_location[len(input_directory):])[0]
                 output_location = output_directory + sample_name + ".pt"
-                adast_mdl.generate_and_save_embeddings(file_location, output_location)
+                adast_mdl.generate_and_save_embeddings(file_location, output_location,device)
         print(machine+" "+domain+" done")
-"""
 
 
 
 
 
+# save as dataframe
 """
 embedding_base_directory="../dev_data_embeddings/"
 for machine in os.listdir(embedding_base_directory):

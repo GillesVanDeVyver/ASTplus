@@ -24,3 +24,9 @@ prototypes/src/results/autoencoder_extra/lr=5e-06_nbEpochs=1000/AUC_scores_AE_lr
 ASTAE/src/results/
 
 ASTAE/src/runs/
+
+prototypes/src/result/
+
+ASTAE/src/old_runs/
+
+ASTAE/src/AMINO/modules/
