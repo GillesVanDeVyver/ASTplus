@@ -1,3 +1,3 @@
 # ASTplus
 
-Documentaation TODO
+Documentation and readme TODO
