@@ -21,7 +21,11 @@ def generate_spectrograms(input_base_directory,output_base_directory):
 
 
 def generate_dataframes(input_base_directory,output_base_directory):
-    for machine in os.listdir(input_base_directory):
+    #for machine in os.listdir(input_base_directory):
+    #for machine in ["fan","gearbox","pump","slider"]:
+    for machine in ["ToyCar","ToyTrain","valve"]:
+
+
         for domain in os.listdir(input_base_directory+"/"+machine):
             tensors_in_domain = None
             lables = []
@@ -62,20 +66,20 @@ raw_audio_base_directory="../../dev_data/"
 
 
 
-spectrograms_base_directory="../../dev_data_spectrograms/"
+#spectrograms_base_directory="../../dev_data_spectrograms/"
 #spectrograms_base_directory="../../dev_sample_spectrograms/"
 
-#spectrograms_base_directory="../../dev_data_spectrograms_server/"
+spectrograms_base_directory="../../dev_data_spectrograms_server/"
 
 
 
-dataframes_base_directory="../../dev_data_dataframes/"
+#dataframes_base_directory="../../dev_data_dataframes/"
 #dataframes_base_directory="../../dev_sample_dataframes/"
 
-#dataframes_base_directory="../../dev_data_dataframes_server/"
+dataframes_base_directory="../../dev_data_dataframes_server/"
 
 
-#generate_spectrograms(raw_audio_base_directory,spectrograms_base_directory)
+generate_spectrograms(raw_audio_base_directory,spectrograms_base_directory)
 generate_dataframes(spectrograms_base_directory,dataframes_base_directory)
 #test=torch.load("../../dev_sample_dataframes/debug_sample/train/dataframe.pt")
 #test2=torch.load("../../dev_data_dataframes/fan/train/dataframe.pt")

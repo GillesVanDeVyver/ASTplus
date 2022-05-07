@@ -123,6 +123,7 @@ def load_embeddings(input_directory):
         if filename.endswith(".pt"):
             file_location = input_directory + "/" + filename
             loaded_tensor = torch.load(file_location)
+            loaded_tensor=loaded_tensor.to("cpu")
             if tensors_in_domain == None:
                 tensors_in_domain = loaded_tensor
             else:
@@ -312,10 +313,22 @@ def select_dirs(param, mode):
     """
     if mode:
         logger.info("load_directory <- development")
-        query = os.path.abspath("{base}/*".format(base=param["dev_directory"]))
+        query = os.path.abspath("../{base}/*".format(base=param["dev_directory"]))
     else:
-        logger.info("load_directory <- evaluation")
-        query = os.path.abspath("{base}/*".format(base=param["eval_directory"]))
+        raise ("not implemented yet")
+        #logger.info("load_directory <- evaluation")
+        #query = os.path.abspath("../{base}/*".format(base=param["eval_directory"]))
+    dirs = sorted(glob.glob(query))
+    dirs = [f for f in dirs if os.path.isdir(f)]
+    return dirs
+
+
+def select_dirs_AST(param, mode):
+    if mode:
+        logger.info("load_directory <- development")
+        query = os.path.abspath("../{base}/*".format(base=param["ast_data_directory"]))
+    else:
+        raise ("not implemented yet")
     dirs = sorted(glob.glob(query))
     dirs = [f for f in dirs if os.path.isdir(f)]
     return dirs

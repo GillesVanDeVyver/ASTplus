@@ -12,7 +12,7 @@ import pandas as pd
 
 # ADAST: Anomaly Detector AST
 class adast(): # anomaly detection ast_model
-    def __init__(self,input_tdim = 1024,num_mel_bins=128,embedding_dimension=768,full_output=False):
+    def __init__(self,input_tdim = 1024,num_mel_bins=128,embedding_dimension=768,full_output=False,number_of_layers=None):
         # audioset input sequence length is 1024
         pretrained_mdl_path = '../../pretrained_models/audioset_10_10_0.4593.pth'
         # get the frequency and time stride of the pretrained model from its name
@@ -27,9 +27,9 @@ class adast(): # anomaly detection ast_model
         print(device)
         sd = torch.load(pretrained_mdl_path, map_location=device)
         if full_output:
-            audio_model_ast = models.ASTModel_full(input_tdim=input_tdim, fstride=fstride, tstride=tstride)
+            audio_model_ast = models.ASTModel_full(input_tdim=input_tdim, fstride=fstride, tstride=tstride,number_of_layers=number_of_layers)
         else:
-            audio_model_ast = models.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride)
+            audio_model_ast = models.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride,number_of_layers=number_of_layers)
         self.audio_model = torch.nn.DataParallel(audio_model_ast)
         self.audio_model.load_state_dict(sd, strict=False)
         self.num_mel_bins=num_mel_bins
@@ -76,22 +76,37 @@ def generate_lables_and_pd_dataframe(input_directory,format="one_class_svm",cust
             if tensors_in_domain == None:
                 tensors_in_domain = loaded_tensor
             else:
+                loaded_tensor.to("cpu")
+                tensors_in_domain.to('cpu')
                 tensors_in_domain = torch.cat((tensors_in_domain, loaded_tensor))
-    px = pd.DataFrame(tensors_in_domain.detach().numpy())
+    px = pd.DataFrame(tensors_in_domain.detach().cpu().numpy())
     return lables,px
 
 
 # generate intermediate tensors and store as .pt files
-full_output = True
+full_output = False
+server = True
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-adast_mdl = adast(full_output=full_output)
+nb_layers = 5
+adast_mdl = adast(full_output=full_output,number_of_layers=nb_layers)
 base_directory="../../dev_data/"
-if full_output:
-    output_base_directory="../dev_data_embeddings_full/"
+
+
+if nb_layers ==None:
+    if full_output:
+        output_base_directory="../../dev_data_embeddings_full/"
+    else:
+        output_base_directory="../../dev_data_embeddings/"
 else:
-    output_base_directory="../dev_data_embeddings/"
-for machine in os.listdir(base_directory):
+    if full_output:
+        output_base_directory="../../dev_data_embeddings_full_"+str(nb_layers)+"layers/"
+    else:
+        output_base_directory="../../dev_data_embeddings_"+str(nb_layers)+"layers/"
+
+
+
+
+for machine in ["gearbox","valve","slider","ToyTrain","fan","pump","ToyCar"]:
     for domain in os.listdir(base_directory+"/"+machine):
         input_directory = base_directory + machine + "/" + domain
         output_directory = output_base_directory + machine+'/'+domain
@@ -108,21 +123,23 @@ for machine in os.listdir(base_directory):
 
 
 # save as dataframe
-"""
-embedding_base_directory="../dev_data_embeddings/"
-for machine in os.listdir(embedding_base_directory):
+
+#embedding_base_directory="../../dev_data_embeddings/"
+
+embedding_base_directory=output_base_directory
+for machine in ["gearbox","valve","slider","ToyTrain","fan","pump","ToyCar"]:
     if os.path.isdir(embedding_base_directory+"/"+machine):
         print(machine)
         for domain in os.listdir(embedding_base_directory + "/" + machine):
             machine_dir=embedding_base_directory + machine
             input_directory = embedding_base_directory + machine + "/" + domain
             if os.path.isdir(input_directory):
-                X=load_embeddings(input_directory)
+                X=common.load_embeddings(input_directory)
                 pickle_location=input_directory+"/"+"dataframe.pkl"
                 X.to_pickle(pickle_location)
                 print(X.shape)
         print(machine+" "+domain+" done")
-"""
+
 
 #embedding_base_directory = "../dev_data_embeddings/"
 #common.combine_embeddings(embedding_base_directory)

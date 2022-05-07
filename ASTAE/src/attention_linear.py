@@ -15,7 +15,7 @@ import copy
 import collections
 
 
-def pretrained_AST(input_tdim = 1024, audioset_only = False):
+def pretrained_AST(input_tdim = 1024, audioset_only = False,audioset_pretrain=True,imagenet_pretrain=True,tiny=False):
     pretrained_mdl_path = '../../pretrained_models/audioset_10_10_0.4593.pth'
     # get the frequency and time stride of the pretrained model from its name
     fstride, tstride = int(pretrained_mdl_path.split('/')[-1].split('_')[1]), int(pretrained_mdl_path.split('/')[-1].split('_')[2].split('.')[0])
@@ -25,10 +25,24 @@ def pretrained_AST(input_tdim = 1024, audioset_only = False):
     print("device: "+ str(device))
     #sd = torch.load(pretrained_mdl_path, map_location=device)
     #audio_model_ast = ast_model.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride,model_size='tiny224')
-    if audioset_only:
-        pretrained_mdl_path = '../../audio-transformer/scv2/checkpoint-75.pth'
-    audio_model_ast = ast_model.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride)
-    #audio_model = torch.nn.DataParallel(audio_model_ast)
+    #if audioset_only:
+    #    pretrained_mdl_path = '../../audio-transformer/scv2/checkpoint-75.pth'
+
+    if tiny:
+          audio_model_ast = ast_model.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride,
+                                             audioset_pretrain=False,imagenet_pretrain=False,model_size="tiny224")
+          if audioset_pretrain and imagenet_pretrain:
+             pretrained_mdl_path = '../../pretrained_models/tiny_ast_checkpoint-115.pth'
+             sd = torch.load(pretrained_mdl_path, map_location=device)
+             audio_model_ast.load_state_dict(sd, strict=False)
+
+          else:
+              raise ("not implemented")
+
+    else:
+        audio_model_ast = ast_model.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride,
+                                             audioset_pretrain=audioset_pretrain,imagenet_pretrain=imagenet_pretrain)
+    #audio_model_ast = torch.nn.DataParallel(audio_model_ast)
     #audio_model.load_state_dict(sd, strict=False)
     return audio_model_ast
 
@@ -116,7 +130,7 @@ class Self_attention(Attention):
 
 class Encoder(nn.Module):
 
-    def __init__(self,depth_encoder,vit,trainable_encoder,avg=False):
+    def __init__(self,depth_encoder,vit,trainable_encoder,avg=False,depth_trainable=0):
         super().__init__()
         if avg:
             averaged_encoder = copy.deepcopy(vit.blocks[0])
@@ -126,7 +140,7 @@ class Encoder(nn.Module):
             self.encoderBlocks = vit.blocks[:depth_encoder]
 
         if trainable_encoder:
-            self.encoderBlocks.requires_grad_(True)
+            self.encoderBlocks[-depth_trainable:].requires_grad_(True)
         self.vit = vit
 
 
@@ -165,11 +179,13 @@ class attention_linear_model(nn.Module):
     :param depth_encoder: the number of blocks in the encoder
     :param depth_decoder: the number of layers in the decoder    """
 
-    def __init__(self, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, depth_encoder=1,
-                 depth_decoder=1,verbose=True, trainable_encoder = False,avg=False,audioset_only=False):
+    def __init__(self, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, depth_encoder=1,depth_trainable=1,
+                 depth_decoder=1,verbose=True, trainable_encoder = False,avg=False,audioset_only=False,
+                 audioset_pretrain=True,imagenet_pretrain=True,tiny=False):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #device = "cpu"
 
+        print(device)
 
         super(attention_linear_model, self).__init__()
         assert timm.__version__ == '0.4.5', 'From AST model, not sure if really necessary'  # AST
@@ -185,7 +201,10 @@ class attention_linear_model(nn.Module):
                   .format(depth_encoder,depth_decoder))
 
         # automatically get the intermediate shape # AST
-        self.embed_dim=768
+        if tiny:
+            self.embed_dim=192
+        else:
+            self.embed_dim=768
         f_dim, t_dim = self.get_shape(fstride, tstride, input_fdim, input_tdim)
         num_patches = f_dim * t_dim
         if verbose == True:
@@ -194,7 +213,8 @@ class attention_linear_model(nn.Module):
 
         # the linear projection layer
         print("device: "+ str(device))
-        self.AST_model = pretrained_AST(audioset_only=audioset_only)
+        self.AST_model = pretrained_AST(audioset_only=audioset_only,audioset_pretrain=audioset_pretrain,imagenet_pretrain=imagenet_pretrain,
+                                        tiny=tiny)
         self.AST_model.requires_grad_(False)
         print("device: "+ str(device))
         #self.AST_model.v.to(device)
@@ -209,7 +229,7 @@ class attention_linear_model(nn.Module):
         #dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth_encoder)]  # stochastic depth decay rule # vIt
         #self.encoderBlocks = self.AST_model.v.blocks
 
-        self.encoder = Encoder(depth_encoder,self.AST_model.v,trainable_encoder,avg)
+        self.encoder = Encoder(depth_encoder,self.AST_model.v,trainable_encoder,avg,depth_trainable)
 
         self.decoder = Decoder(depth_decoder,self.embed_dim,act_layer=nn.GELU,drop=0.)
         self.decoder.requires_grad_(True)

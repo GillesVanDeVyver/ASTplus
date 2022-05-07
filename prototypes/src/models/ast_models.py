@@ -29,6 +29,9 @@ class PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
+        temp = self.proj(x)
+        temp2=self.proj(x).flatten(2)
+        temp3=temp2.unflatten(2,(12,101))
         x = self.proj(x).flatten(2).transpose(1, 2)
         return x
 
@@ -44,10 +47,12 @@ class ASTModel(nn.Module):
     :param audioset_pretrain: if use full AudioSet and ImageNet pretrained model
     :param model_size: the model size of AST, should be in [tiny224, small224, base224, base384], base224 and base 384 are same model, but are trained differently during ImageNet pretraining.
     """
-    def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, imagenet_pretrain=True, audioset_pretrain=False, model_size='base384', verbose=True):
+    def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, imagenet_pretrain=True, audioset_pretrain=False, model_size='base384', verbose=True,
+                 number_of_layers=None):
 
         super(ASTModel, self).__init__()
         assert timm.__version__ == '0.4.5', 'Please use timm == 0.4.5, the code might not be compatible with newer versions.'
+        self.number_of_layers = number_of_layers
 
         if verbose == True:
             print('---------------AST Model Summary---------------')
@@ -175,8 +180,12 @@ class ASTModel(nn.Module):
         x = torch.cat((cls_tokens, dist_token, x), dim=1)
         x = x + self.v.pos_embed
         x = self.v.pos_drop(x)
-        for blk in self.v.blocks:
-            x = blk(x)
+        if self.number_of_layers == None:
+            for blk in self.v.blocks:
+                x = blk(x)
+        else:
+            for blk in self.v.blocks[:self.number_of_layers]:
+                x = blk(x)
         x = self.v.norm(x)
         x = (x[:, 0] + x[:, 1]) / 2
         #x = self.mlp_head(x)

@@ -21,7 +21,9 @@ import numpy as np
 import pickle
 from torch.cuda.amp import autocast,GradScaler
 import pureAttentionAE
-import attention_linear
+#import attention_linear
+import attention_linearv2
+
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from sklearn import metrics
@@ -70,7 +72,7 @@ def generate_roc_curve(y,labels,title):
     common.generate_ROC_curve(fpr_source, tpr_source, ROC_location_source)
 
 
-def train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=10,n_epochs=1,verbose=True,debug=False):
+def train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,machine,lr_patience=10,n_epochs=1,verbose=True,debug=False):
 
 
 
@@ -113,162 +115,176 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
     #for machine in os.listdir(dataframes_base_directory):
     #for machine in ["fan"]:
 
-    for machine in ["fan","gearbox","pump","slider","ToyCar","ToyTrain","valve"]:
-    #for machine in ["pump","slider","ToyCar","ToyTrain","valve"]:
+    #for machine in ["gearbox","fan","pump","slider","ToyCar","ToyTrain","valve"]:
+    #for machine in ["ToyCar","ToyTrain","valve"]:
 
     #for machine in ["fan"]:
+    #for machine in ["ToyTrain","valve"]:
+
+
+    dataframe_dir = input_base_directory + machine+"/"
+    train_location = dataframe_dir+"train/dataframe.pt" #labels unecessary: all normal
+    validation_source_location = dataframe_dir+"source_test/dataframe.pt"
+    validation_source_labels_location = dataframe_dir+"source_test/labels.pt"
+    validation_target_location = dataframe_dir+"target_test/dataframe.pt"
+    validation_target_labels_location = dataframe_dir+"target_test/labels.pt"
+
+    X_train = torch.load(train_location)
+    X_validation_source = torch.load(validation_source_location)
+    X_validation_source_labels = torch.load(validation_source_labels_location)
+    X_validation_target = torch.load(validation_target_location)
+    X_validation_target_labels = torch.load(validation_target_labels_location)
+    if debug:
+        X_validation_source = X_validation_source[:6]
+        X_validation_source_labels = X_validation_source_labels[:6]
+        X_validation_target = X_validation_target[:6]
+        X_validation_target_labels = X_validation_target_labels[:6]
+    X_train.to(device, non_blocking=True)
+    X_validation_source.to(device, non_blocking=True)
+    X_validation_target.to(device, non_blocking=True)
+
+
+    nb_batches = round(len(X_train)/batch_size)
+
+    title = "DCASE21_"+model_title+"_"+machine+"_"+version
+
+    if debug:
+        log_folder = "runs/debug/"+machine+"/"
+    else:
+        log_folder = "runs/"+machine+"/"
 
 
 
-        dataframe_dir = input_base_directory + machine+"/"
-        train_location = dataframe_dir+"train/dataframe.pt" #labels unecessary: all normal
-        validation_source_location = dataframe_dir+"source_test/dataframe.pt"
-        validation_source_labels_location = dataframe_dir+"source_test/labels.pt"
-        validation_target_location = dataframe_dir+"target_test/dataframe.pt"
-        validation_target_labels_location = dataframe_dir+"target_test/labels.pt"
 
-        X_train = torch.load(train_location)
-        X_validation_source = torch.load(validation_source_location)
-        X_validation_source_labels = torch.load(validation_source_labels_location)
-        X_validation_target = torch.load(validation_target_location)
-        X_validation_target_labels = torch.load(validation_target_labels_location)
+    tb = SummaryWriter(log_folder+title)
+    sample_input = X_train[0:batch_size]
+    sample_input=sample_input.to(device)
+    tb.add_graph(audio_model,sample_input)
+
+    audio_model = torch.nn.DataParallel(audio_model)
+
+
+    train_loss_vals=  []
+    epoch = 1
+    while epoch < n_epochs:
+        print('---------------')
+        print(datetime.datetime.now())
+        print("current #epochs=%s, #steps=%s" % (epoch, global_step))
+        pos = 0
+        epoch_loss= []
         if debug:
-            X_validation_source = X_validation_source[:6]
-            X_validation_source_labels = X_validation_source_labels[:6]
-            X_validation_target = X_validation_target[:6]
-            X_validation_target_labels = X_validation_target_labels[:6]
-        X_train.to(device, non_blocking=True)
-        X_validation_source.to(device, non_blocking=True)
-        X_validation_target.to(device, non_blocking=True)
+            nb_batches = 2
 
 
-        nb_batches = round(len(X_train)/batch_size)
-
-        title = "DCASE21_"+model_title+"_"+machine+"_"+version
-
-        if debug:
-            log_folder = "runs/debug/"+machine+"/"
-        else:
-            log_folder = "runs/"+machine+"/"
-
-
-
-
-        tb = SummaryWriter(log_folder+title)
-        sample_input = X_train[0:batch_size]
-        sample_input=sample_input.to(device)
-        tb.add_graph(audio_model,sample_input)
-
-        train_loss_vals=  []
-        epoch = 0
-        while epoch < n_epochs + 1:
-            print('---------------')
-            print(datetime.datetime.now())
-            print("current #epochs=%s, #steps=%s" % (epoch, global_step))
-            pos = 0
-            epoch_loss= []
-            if debug:
-                nb_batches = 2
+        audio_model.train()
+        for i in range(nb_batches):
+            if (i%100 == 0):
+                print(i)
+            if (pos + batch_size>len(X_train)):
+                X_batch = X_train[pos:]
+            else:
+                X_batch = X_train[pos:pos + batch_size]
+            X_batch=X_batch.to(device, non_blocking=True)
+#            labels = labels.to(device, non_blocking=True)
+#                audio_model = audio_model.to(device)
+            with autocast():
+                audio_output,lin_proj_output = audio_model(X_batch)
+                loss = loss_fn(audio_output, lin_proj_output)
 
 
-            audio_model .train()
-            for i in range(nb_batches):
-                if (i%100 == 0):
-                    print(i)
-                if (pos + batch_size>len(X_train)):
-                    X_batch = X_train[pos:]
-                else:
-                    X_batch = X_train[pos:pos + batch_size]
-                X_batch=X_batch.to(device, non_blocking=True)
-    #            labels = labels.to(device, non_blocking=True)
-    #                audio_model = audio_model.to(device)
-                with autocast():
-                    audio_output,lin_proj_output = audio_model(X_batch)
-                    loss = loss_fn(audio_output, lin_proj_output)
+            optimizer.zero_grad()
+            if device=="cuda":
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
+            epoch_loss.append(loss.item())
+
+            global_step += 1
+        avg_epoch_loss=sum(epoch_loss)/len(epoch_loss)
+        train_loss_vals.append(avg_epoch_loss)
+        tb.add_scalar('Loss/train', avg_epoch_loss, epoch)
+
+        scheduler.step(avg_epoch_loss)
 
 
-                optimizer.zero_grad()
-                if device=="cuda":
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
-                else:
-                    loss.backward()
-                    optimizer.step()
-                epoch_loss.append(loss.item())
+        audio_model.eval() # log validation accuracy during training (and without interfering with training)
 
-                global_step += 1
-            avg_epoch_loss=sum(epoch_loss)/len(epoch_loss)
-            train_loss_vals.append(avg_epoch_loss)
-            tb.add_scalar('Loss/train', avg_epoch_loss, epoch)
+        mse_source,auc_source,pauc_source = calc_AUC(X_validation_source,X_validation_source_labels,loss_fn,True,log=True,tb=tb,epoch=epoch,debug=debug)
+        mse_target,auc_target,pauc_target= calc_AUC(X_validation_target,X_validation_target_labels,loss_fn,False,log=True,tb=tb,epoch=epoch,debug=debug)
 
-            scheduler.step(avg_epoch_loss)
+        if epoch%50==0 and not debug:
+            torch.save(audio_model.state_dict(), "trained_models/intermediate_results/"+title+"_intermediate_"+str(epoch)+".pt")
 
-
-            audio_model.eval() # log validation accuracy during training (and without interfering with training)
-
-            mse_source,auc_source,pauc_source = calc_AUC(X_validation_source,X_validation_source_labels,loss_fn,True,log=True,tb=tb,epoch=epoch,debug=debug)
-            mse_target,auc_target,pauc_target= calc_AUC(X_validation_target,X_validation_target_labels,loss_fn,False,log=True,tb=tb,epoch=epoch,debug=debug)
-
-            if epoch%50==0 and not debug:
-                torch.save(audio_model.state_dict(), "trained_models/intermediate_results/"+title+"_intermediate_"+str(epoch)+".pt")
-
-            epoch += 1
+        epoch += 1
 
 
 
 
-        #figname = "DCASE21_"+machine+"_"+version+"_train"
-        #custom_plot(np.linspace(1, n_epochs, n_epochs).astype(int), train_loss_vals, figname,debug)
-        #for n_iter in range(100):
-         #   tb.add_scalar('Loss/train', np.random.random(), n_iter)
-        if not debug:
-            torch.save(audio_model.state_dict(), "trained_models/"+title+".pt")
+    #figname = "DCASE21_"+machine+"_"+version+"_train"
+    #custom_plot(np.linspace(1, n_epochs, n_epochs).astype(int), train_loss_vals, figname,debug)
+    #for n_iter in range(100):
+     #   tb.add_scalar('Loss/train', np.random.random(), n_iter)
+    if not debug:
+        torch.save(audio_model.state_dict(), "trained_models/"+title+".pt")
 
-        generate_roc_curve(mse_source,X_validation_source_labels,title+"_source")
-        generate_roc_curve(mse_target,X_validation_target_labels,title+"_target")
+    generate_roc_curve(mse_source,X_validation_source_labels,title+"_source")
+    generate_roc_curve(mse_target,X_validation_target_labels,title+"_target")
 
 
-        tb.close()
+    tb.close()
 
-        print(machine + " done")
 
 
 #TODO
 """
-- adjust hyper parameters?
-- put hyper parameters in yaml file
-
-extras not taken over from AST
--> warmup
--> save intermediate progress
+- put hyper parameters in yaml file (optional)
 """
 
 
 
 server = True
 
-audio_model = attention_linear.attention_linear_model(depth_encoder=12, trainable_encoder=False,avg=False,depth_decoder=1
-                                                    ,audioset_only=False)
-
-
-model_title = "attention_linear"
-
-
-if server:
-    input_base_directory = "../../dev_data_dataframes_server/"
-else:
-    input_base_directory = "../../dev_data_dataframes/"
 
 
 
-lr_encoder = 0.00005
-lr_decoder = 0.001
+#for machine in ["gearbox","valve","slider","ToyTrain","fan","pump","ToyCar"]:
+for machine in ["gearbox"]:
 
-batch_size=12 # AST
-version = "11,2"
-train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=5,n_epochs=200,verbose=True,
-      debug=False)
+    #versions = ["20,2","21,2","22,2","23,2","24,2"]
+    #for i in range(len(versions)):
+    #    depth_decoder = i +1
+
+
+
+    #audio_model = attention_linear.attention_linear_model(depth_encoder=1,depth_trainable=1, trainable_encoder=True,avg=False,depth_decoder=1
+    #                                                ,audioset_only=False,audioset_pretrain=False,imagenet_pretrain=False,
+    #                                                      tiny=False)
+    audio_model = attention_linearv2.attention_linear_model(depth_encoder=5,depth_trainable=1, trainable_encoder=True,avg=False,depth_decoder=1
+                                                    ,audioset_only=False,audioset_pretrain=True,imagenet_pretrain=True,
+                                                          tiny=False)
+
+    model_title = "attention_linear"
+
+
+    if server:
+        input_base_directory = "../../dev_data_dataframes_server/"
+    else:
+        input_base_directory = "../../dev_data_dataframes/"
+
+
+
+    lr_encoder = 0.00005
+    lr_decoder = 0.0001
+
+    batch_size=64  #128 makes gpu go out of memory
+    version = "B.1"
+
+    train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=5,n_epochs=200,verbose=True,
+          debug=False,machine=machine)
+    print(machine + " done")
 
 
 """

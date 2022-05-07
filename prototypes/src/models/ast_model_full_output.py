@@ -44,11 +44,12 @@ class ASTModel_full(nn.Module):
     :param audioset_pretrain: if use full AudioSet and ImageNet pretrained model
     :param model_size: the model size of AST, should be in [tiny224, small224, base224, base384], base224 and base 384 are same model, but are trained differently during ImageNet pretraining.
     """
-    def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, imagenet_pretrain=True, audioset_pretrain=False, model_size='base384', verbose=True):
+    def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, imagenet_pretrain=True, audioset_pretrain=False, model_size='base384', verbose=True,
+                 number_of_layers = None):
 
         super(ASTModel_full, self).__init__()
         assert timm.__version__ == '0.4.5', 'Please use timm == 0.4.5, the code might not be compatible with newer versions.'
-
+        self.number_of_layers = number_of_layers
         if verbose == True:
             print('---------------AST Model Summary---------------')
             print('ImageNet pretraining: {:s}, AudioSet pretraining: {:s}'.format(str(imagenet_pretrain),str(audioset_pretrain)))
@@ -175,8 +176,13 @@ class ASTModel_full(nn.Module):
         x = torch.cat((cls_tokens, dist_token, x), dim=1)
         x = x + self.v.pos_embed
         x = self.v.pos_drop(x)
-        for blk in self.v.blocks:
-            x = blk(x)
+        if self.number_of_layers == None:
+            for blk in self.v.blocks:
+                x = blk(x)
+        else:
+            for blk in self.v.blocks[:self.number_of_layers]:
+                x = blk(x)
+
         x = self.v.norm(x)
         x = x[:,2:] #drop class and distillation token
         #x = (x[:, 0] + x[:, 1]) / 2

@@ -3,7 +3,7 @@
 /dev_data_spectrograms
 /pretrained_models
 /dev_data_spectrograms_server
-/dev_data_dataframes_server
+/dev_data_embeddings
 /prototypes/src/__pycache__/keras_model_ae.cpython-38.pyc
 /prototypes/src/__pycache__/visualizer.cpython-38.pyc
 /prototypes/src/models/__pycache__/__init__.cpython-38.pyc
@@ -30,3 +30,7 @@ prototypes/src/result/
 ASTAE/src/old_runs/
 
 ASTAE/src/AMINO/modules/
+
+ASTAE/src/garbage_runs/
+
+/dev_data_embeddings_5layers
