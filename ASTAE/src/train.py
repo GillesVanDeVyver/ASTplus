@@ -247,44 +247,48 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
 server = True
 
+versions = ["B.1","B.2","B.3","B.4","B.5"]
+layers = [5,8,3,2,4]
+
+for i in range(len(versions)):
+    version = versions[i]
+    nb_enc_layers = layers[i]
+
+    #for machine in ["gearbox","valve","slider","ToyTrain","fan","pump","ToyCar"]:
+    for machine in ["gearbox"]:
+
+        #versions = ["20,2","21,2","22,2","23,2","24,2"]
+        #for i in range(len(versions)):
+        #    depth_decoder = i +1
 
 
 
-#for machine in ["gearbox","valve","slider","ToyTrain","fan","pump","ToyCar"]:
-for machine in ["gearbox"]:
+        #audio_model = attention_linear.attention_linear_model(depth_encoder=1,depth_trainable=1, trainable_encoder=True,avg=False,depth_decoder=1
+        #                                                ,audioset_only=False,audioset_pretrain=False,imagenet_pretrain=False,
+        #                                                      tiny=False)
+        audio_model = attention_linearv2.attention_linear_model(depth_encoder=nb_enc_layers,depth_trainable=1, trainable_encoder=True,avg=False,depth_decoder=1
+                                                        ,audioset_only=False,audioset_pretrain=True,imagenet_pretrain=True,
+                                                              tiny=False,dropout_decoder=0)
 
-    #versions = ["20,2","21,2","22,2","23,2","24,2"]
-    #for i in range(len(versions)):
-    #    depth_decoder = i +1
-
-
-
-    #audio_model = attention_linear.attention_linear_model(depth_encoder=1,depth_trainable=1, trainable_encoder=True,avg=False,depth_decoder=1
-    #                                                ,audioset_only=False,audioset_pretrain=False,imagenet_pretrain=False,
-    #                                                      tiny=False)
-    audio_model = attention_linearv2.attention_linear_model(depth_encoder=5,depth_trainable=1, trainable_encoder=True,avg=False,depth_decoder=1
-                                                    ,audioset_only=False,audioset_pretrain=True,imagenet_pretrain=True,
-                                                          tiny=False)
-
-    model_title = "attention_linear"
+        model_title = "attention_linear"
 
 
-    if server:
-        input_base_directory = "../../dev_data_dataframes_server/"
-    else:
-        input_base_directory = "../../dev_data_dataframes/"
+        if server:
+            input_base_directory = "../../dev_data_dataframes_server/"
+        else:
+            input_base_directory = "../../dev_data_dataframes/"
 
 
 
-    lr_encoder = 0.00005
-    lr_decoder = 0.0001
+        lr_encoder = 0.00005
+        lr_decoder = 0.0001
 
-    batch_size=64  #128 makes gpu go out of memory
-    version = "B.1"
+        batch_size=64  #128 makes gpu go out of memory
+        #version = "B.6"
 
-    train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=5,n_epochs=200,verbose=True,
-          debug=False,machine=machine)
-    print(machine + " done")
+        train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=5,n_epochs=200,verbose=True,
+              debug=False,machine=machine)
+        print(machine + " done")
 
 
 """

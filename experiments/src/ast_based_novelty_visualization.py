@@ -24,7 +24,7 @@ class adast(): # anomaly detection ast_model
         sd = torch.load(pretrained_mdl_path, map_location=device)
         audio_model_ast = models.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride)
         self.audio_model = torch.nn.DataParallel(audio_model_ast)
-        self.audio_model.load_state_dict(sd, strict=False)
+        #self.audio_model.load_state_dict(sd, strict=False)
         self.num_mel_bins=num_mel_bins
         self.embedding_dimension=embedding_dimension
 
@@ -33,6 +33,9 @@ class adast(): # anomaly detection ast_model
         log_mel = common.convert_to_log_mel(file_location, num_mel_bins=self.num_mel_bins, target_length=self.input_tdim)
         input = torch.unsqueeze(log_mel, dim=0)
         #input = torch.rand([1, self.input_tdim, 128])
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        input=input.to(device)
+        self.audio_model=self.audio_model.to(device)
         output = self.audio_model(input)
         return output
 

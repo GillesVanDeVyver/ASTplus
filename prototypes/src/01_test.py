@@ -71,6 +71,31 @@ if __name__ == "__main__":
 
     # loop of the base directory
     for idx, target_dir in enumerate(dirs):
+
+        dir_names = ["source_test", "target_test"]
+
+        for dir_name in dir_names:
+
+            #list machine id
+            section_names = com.get_section_names(target_dir, dir_name=dir_name)
+
+            for section_name in section_names:
+                # load test file
+                files, y_true = com.file_list_generator(target_dir=target_dir,
+                                                        section_name=section_name,
+                                                        dir_name=dir_name,
+                                                        mode=mode)
+
+            for file_idx, file_path in tqdm(enumerate(files), total=len(files)):
+                data = com.file_to_vectors(file_path,
+                                                n_mels=param["feature"]["n_mels"],
+                                                n_frames=param["feature"]["n_frames"],
+                                                n_fft=param["feature"]["n_fft"],
+                                                hop_length=param["feature"]["hop_length"],
+                                                power=param["feature"]["power"])
+
+
+
         print("\n===========================")
         print("[{idx}/{total}] {target_dir}".format(target_dir=target_dir, idx=idx+1, total=len(dirs)))
         machine_type = os.path.split(target_dir)[1]

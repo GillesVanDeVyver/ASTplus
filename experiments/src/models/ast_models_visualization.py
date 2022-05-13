@@ -29,6 +29,12 @@ class PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
+        temp1= self.proj(x)
+        temp2 = temp1.flatten(2)
+        temp3 = temp2.transpose(1, 2)
+        temp4 = temp3.transpose(1, 2)
+        temp5 = temp4.reshape(1,768,12,101)
+        #print(torch.eq(temp5, temp1))
         x = self.proj(x).flatten(2).transpose(1, 2)
         return x
 
@@ -44,7 +50,7 @@ class ASTModel(nn.Module):
     :param audioset_pretrain: if use full AudioSet and ImageNet pretrained model
     :param model_size: the model size of AST, should be in [tiny224, small224, base224, base384], base224 and base 384 are same model, but are trained differently during ImageNet pretraining.
     """
-    def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, imagenet_pretrain=True, audioset_pretrain=False, model_size='base384', verbose=True):
+    def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, imagenet_pretrain=True, audioset_pretrain=True, model_size='base384', verbose=True):
 
         super(ASTModel, self).__init__()
         assert timm.__version__ == '0.4.5', 'Please use timm == 0.4.5, the code might not be compatible with newer versions.'
@@ -121,7 +127,10 @@ class ASTModel(nn.Module):
                 raise ValueError('currently only has base384 AudioSet pretrained model.')
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             #device=torch.device("cuda")
-            if os.path.exists('../../../pretrained_models/audioset_10_10_0.4593.pth') == False:
+            if os.path.exists('./../../pretrained_models/audioset_10_10_0.4593.pth') == False:
+                temp = os.path.exists('./../../pretrained_models')
+                temp2 = os.path.exists('./results')
+                temp3 = os.path.exists('./results')
                 # this model performs 0.4593 mAP on the audioset eval set
                 audioset_mdl_url = 'https://www.dropbox.com/s/cv4knew8mvbrnvq/audioset_0.4593.pth?dl=1'
                 wget.download(audioset_mdl_url, out='../../pretrained_models/audioset_10_10_0.4593.pth')

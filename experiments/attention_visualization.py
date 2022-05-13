@@ -16,7 +16,7 @@ import cv2
 from PIL import Image
 from torchvision import transforms
 
-from VisionTransformer.vision_transformer_pytorch import VisionTransformer
+from vision_transformer_pytorch import VisionTransformer
 
 import sys
 

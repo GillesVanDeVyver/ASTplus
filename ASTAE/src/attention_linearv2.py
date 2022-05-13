@@ -181,7 +181,7 @@ class attention_linear_model(nn.Module):
 
     def __init__(self, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, depth_encoder=1,depth_trainable=1,
                  depth_decoder=1,verbose=True, trainable_encoder = False,avg=False,audioset_only=False,
-                 audioset_pretrain=True,imagenet_pretrain=True,tiny=False):
+                 audioset_pretrain=True,imagenet_pretrain=True,tiny=False,dropout_decoder = 0):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #device = "cpu"
 
@@ -231,7 +231,7 @@ class attention_linear_model(nn.Module):
 
         self.encoder = Encoder(depth_encoder,self.AST_model.v,trainable_encoder,avg,depth_trainable)
 
-        self.decoder = Decoder(depth_decoder,self.embed_dim,act_layer=nn.GELU,drop=0.)
+        self.decoder = Decoder(depth_decoder,self.embed_dim,act_layer=nn.GELU,drop=dropout_decoder)
         self.decoder.requires_grad_(True)
 
         """
