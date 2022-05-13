@@ -9,6 +9,16 @@ def convert_to_log_mel(path_to_file, num_mel_bins=128, target_length=1024):
     fbank = torchaudio.compliance.kaldi.fbank(waveform, htk_compat=True, sample_frequency=sample_rate, use_energy=False,
                                               window_type='hanning', num_mel_bins=num_mel_bins, dither=0.0,
                                               frame_shift=10)  # using parameters from AST
+    #y = waveform.squeeze(0).numpy()
+    #mel_spectrogram = librosa.feature.melspectrogram(y=y,
+    #                                        sr=sample_rate,
+    #                                        n_fft=1024,
+    #                                        hop_length=160,
+    #                                        n_mels=num_mel_bins,
+    #                                        power=2)
+    #fbank = 20.0 / 2 * np.log10(np.maximum(mel_spectrogram, sys.float_info.epsilon))
+    #fbank= torch.tensor(fbank)
+    #fbank=fbank.transpose(0, 1)
     n_frames = fbank.size(dim=0)
     p = target_length - n_frames
     # cut and pad
@@ -17,7 +27,8 @@ def convert_to_log_mel(path_to_file, num_mel_bins=128, target_length=1024):
         fbank = m(fbank)
     elif p < 0:
         fbank = fbank[0:target_length, :]
-    return fbank
+    temp = fbank.to('cpu').detach().numpy()
+    return fbank #1024 128
 
 
 def generate_confusion_matrix(prediction_labels, true_labels):

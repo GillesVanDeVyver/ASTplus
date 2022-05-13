@@ -50,13 +50,16 @@ def get_attention_map(input_location,img, model,get_mask=False):
 
 
     #print(att_mat.detach().numpy().shape)
-
+    aug_att_mat=att_mat
 
     # To account for residual connections, we add an identity matrix to the
     # attention matrix and re-normalize the weights.
-    residual_att = torch.eye(att_mat.size(1))
-    aug_att_mat = att_mat + residual_att
-    aug_att_mat = aug_att_mat / aug_att_mat.sum(dim=-1).unsqueeze(-1)
+    #residual_att = torch.eye(att_mat.size(1))
+    #aug_att_mat = att_mat + residual_att
+    #temp = aug_att_mat.sum(dim=-1)
+    #temp2 = aug_att_mat.sum(dim=-1).unsqueeze(-1)
+
+    #aug_att_mat = aug_att_mat / aug_att_mat.sum(dim=-1).unsqueeze(-1)
 
 
 
@@ -65,10 +68,25 @@ def get_attention_map(input_location,img, model,get_mask=False):
     joint_attentions[0] = aug_att_mat[0]
 
     for n in range(1, aug_att_mat.size(0)):
+    #for n in range(1,3):
         joint_attentions[n] = torch.matmul(aug_att_mat[n], joint_attentions[n - 1])
 
     v = joint_attentions[-1]
-    mask = (v[0, 2:].reshape(12, 101).detach().numpy()+v[1, 2:].reshape(12, 101).detach().numpy())/2
+    tempv=v.detach().numpy()
+
+    mask = (v[0,2:].detach().numpy()+v[1,2:].detach().numpy())/2
+
+
+
+    mask = mask.reshape(12, 101)
+    temp = mask[:2,:]
+    mask[:2,:]=mask[:2,:]/10 # adjust for the fact that high up in the frequency spectrum the values are lower
+    mask = mask[:,:-2] # adjust for padding
+    #mask = (v[0, 2:].reshape(12, 101).detach().numpy()+v[1, 2:].reshape(12, 101).detach().numpy())/2
+    #mask = (v[2:, 0].reshape(12, 101).detach().numpy()+v[2:, 1].reshape(12, 101).detach().numpy())/2
+
+    mask = mask[2:,:-2]
+    #mask=np.flip(mask,0)
 
     #img2 = img.convert('RGBA')
     #arr = np.array(img2)
@@ -77,10 +95,13 @@ def get_attention_map(input_location,img, model,get_mask=False):
         result = cv2.resize(mask / mask.max(), img.size)
     else:
         mask = cv2.resize(mask / mask.max(), img.size)[..., np.newaxis]
+        #mask_avg = np.average(mask)
+        #mask=mask-mask_avg
         mask_avg = np.average(mask)
         mask=mask/mask_avg
         #max_mask = np.amax(mask)
         #mask=mask/max_mask
+        #mask = mask-mask_avg
         result = (mask * img).astype("uint8")
         #result = mask*arr
         for row in result:
@@ -152,11 +173,11 @@ end_interval = start_interval+4
 
 base_directory_spectrograms="./results/spectrograms/"
 base_directory="../../dev_data/"
-output_base_directory="./results/attention_maps12/"
+output_base_directory="./results/attention_maps12_hack2/"
 skipcount=0
 #for machine in os.listdir(base_directory_spectrograms):
 for machine in ['ToyTrain','gearbox','fan']:
-    for domain in ['target_test','train']:
+    for domain in ['train']:
         skipcount=0
 
         torch.cuda.empty_cache()
@@ -166,7 +187,8 @@ for machine in ['ToyTrain','gearbox','fan']:
         input_directory = base_directory+ machine + "/" + domain
         output_directory = output_base_directory + machine+'/'+domain
         for filename in os.listdir(input_directory_specrograms):
-            if filename.endswith(".png") and skipcount>0 and skipcount<10 :
+            if filename.endswith(".png") and skipcount>0 and skipcount<5 :
+                print(skipcount)
                 torch.cuda.empty_cache()
                 print("cache cleared")
 

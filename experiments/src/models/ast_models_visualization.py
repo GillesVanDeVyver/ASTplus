@@ -175,6 +175,7 @@ class ASTModel(nn.Module):
         """
         # expect input x = (batch_size, time_frame_num, frequency_bins), e.g., (12, 1024, 128)
         x = x.unsqueeze(1)
+        temp = x.to('cpu').detach().numpy()
         x = x.transpose(2, 3)
 
         B = x.shape[0]
