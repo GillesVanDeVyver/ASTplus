@@ -54,12 +54,12 @@ def get_attention_map(input_location,img, model,get_mask=False):
 
     # To account for residual connections, we add an identity matrix to the
     # attention matrix and re-normalize the weights.
-    #residual_att = torch.eye(att_mat.size(1))
-    #aug_att_mat = att_mat + residual_att
-    #temp = aug_att_mat.sum(dim=-1)
-    #temp2 = aug_att_mat.sum(dim=-1).unsqueeze(-1)
+    residual_att = torch.eye(att_mat.size(1))
+    aug_att_mat = att_mat + residual_att
+    temp = aug_att_mat.sum(dim=-1)
+    temp2 = aug_att_mat.sum(dim=-1).unsqueeze(-1)
 
-    #aug_att_mat = aug_att_mat / aug_att_mat.sum(dim=-1).unsqueeze(-1)
+    aug_att_mat = aug_att_mat / aug_att_mat.sum(dim=-1).unsqueeze(-1)
 
 
 
@@ -97,10 +97,11 @@ def get_attention_map(input_location,img, model,get_mask=False):
         mask = cv2.resize(mask / mask.max(), img.size)[..., np.newaxis]
         #mask_avg = np.average(mask)
         #mask=mask-mask_avg
+        std_mask = np.std(mask)
         mask_avg = np.average(mask)
-        mask=mask/mask_avg
+        #mask=(mask-mask_avg)/std_mask
         #max_mask = np.amax(mask)
-        #mask=mask/max_mask
+        mask=mask/mask_avg
         #mask = mask-mask_avg
         result = (mask * img).astype("uint8")
         #result = mask*arr
@@ -176,7 +177,7 @@ base_directory="../../dev_data/"
 output_base_directory="./results/attention_maps12_hack2/"
 skipcount=0
 #for machine in os.listdir(base_directory_spectrograms):
-for machine in ['ToyTrain','gearbox','fan']:
+for machine in ['ToyCar']:
     for domain in ['train']:
         skipcount=0
 
@@ -187,7 +188,7 @@ for machine in ['ToyTrain','gearbox','fan']:
         input_directory = base_directory+ machine + "/" + domain
         output_directory = output_base_directory + machine+'/'+domain
         for filename in os.listdir(input_directory_specrograms):
-            if filename.endswith(".png") and skipcount>0 and skipcount<5 :
+            if filename.endswith(".png") and skipcount>20 and skipcount<40 :
                 print(skipcount)
                 torch.cuda.empty_cache()
                 print("cache cleared")

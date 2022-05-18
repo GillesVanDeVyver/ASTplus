@@ -44,13 +44,15 @@ def custom_plot(epochs, loss,figname,debug):
         plt.savefig("results/"+figname+".png")
 
 def calc_AUC(X,labels,loss_fn,source,log=True,tb=None,epoch=None,debug=False,max_fpr=0.1,device='cuda'):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if log and tb==None:
         raise Exception("no tensorboard to log to given")
     mse = []
     for sample in X:
         with autocast():
             sample = torch.unsqueeze(sample, dim=0)
-            sample=sample.to(device)
+            if device == "cuda":
+                sample=sample.to(device)
             sample_output,sample_lin_proj_output = audio_model(sample.detach())
             sample_output = sample_output.detach()
             sample_lin_proj_output = sample_lin_proj_output.detach()
@@ -63,7 +65,7 @@ def calc_AUC(X,labels,loss_fn,source,log=True,tb=None,epoch=None,debug=False,max
         if source:
             label = 'source'
         tb.add_scalar('AUC_scores/'+label, auc, epoch)
-        tb.add_scalar('pAUC_scores/'+label, pauc, epoch)
+        tb.add_scalar('pAUC_scores/'+label, pauc)
     return mse,auc,pauc
 
 def generate_roc_curve(y,labels,title):
@@ -72,7 +74,8 @@ def generate_roc_curve(y,labels,title):
     common.generate_ROC_curve(fpr_source, tpr_source, ROC_location_source)
 
 
-def train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,machine,lr_patience=10,n_epochs=1,verbose=True,debug=False):
+def train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,machine,
+          lr_patience=10,n_epochs=1,verbose=True,debug=False,warmup=True):
 
 
 
@@ -97,10 +100,15 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
         {'params': trainables_decoder, 'lr': lr_decoder}], betas=(0.95, 0.999)
     ) #AST
 
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [2,3,4,5], gamma=0.5, last_epoch=-1)
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.7, patience=lr_patience,
             #threshold=0.01, threshold_mode='abs',verbose=verbose) #AST
     #scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [25,60,100,150], gamma=0.5, last_epoch=-1) #AST
-    scheduler = warmup_scheduler.WarmupLR(optimizer,warmup_steps=10)
+    #if warmup:
+    #    scheduler = warmup_scheduler.WarmupLR(optimizer,warmup_steps=10)
+    #else:
+    #    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [25,60,100,150], gamma=0.5, last_epoch=-1)
+
     loss_fn = torch.nn.MSELoss()
 
     # for amp # AST
@@ -167,6 +175,7 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
     train_loss_vals=  []
     epoch = 1
     while epoch < n_epochs:
+        X_train=X_train[torch.randperm(X_train.size()[0])]
         print('---------------')
         print(datetime.datetime.now())
         print("current #epochs=%s, #steps=%s" % (epoch, global_step))
@@ -246,15 +255,34 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
 
 server = True
+#version = "init2"
 
-versions = ["B.1","B.2","B.3","B.4","B.5"]
-layers = [5,8,3,2,4]
+nb_enc_layers = 3
+depth_trainable = 1
+lr_decoder = 0.000005
+batch_size=16  #128 makes gpu go out of memory
+
+
+warmup = True
+
+versions = ['permut']
+#lrs = [0.0001]
+
+#versions = ['batch32','batch64','batch128']
+#batch_sizes = [32,64,128]
+
 
 for i in range(len(versions)):
     version = versions[i]
-    nb_enc_layers = layers[i]
+    #lr_decoder = lrs[i]
 
-    #for machine in ["gearbox","valve","slider","ToyTrain","fan","pump","ToyCar"]:
+
+#versions = ["layers.1","layers.2","layers.3","layers.4","layers.5"]
+#layers = [5,8,3,2,4]
+#depths = [1,2,3,4,5]
+
+
+    #for machine in ["pump","ToyCar"]:
     for machine in ["gearbox"]:
 
         #versions = ["20,2","21,2","22,2","23,2","24,2"]
@@ -266,12 +294,11 @@ for i in range(len(versions)):
         #audio_model = attention_linear.attention_linear_model(depth_encoder=1,depth_trainable=1, trainable_encoder=True,avg=False,depth_decoder=1
         #                                                ,audioset_only=False,audioset_pretrain=False,imagenet_pretrain=False,
         #                                                      tiny=False)
-        audio_model = attention_linearv2.attention_linear_model(depth_encoder=nb_enc_layers,depth_trainable=1, trainable_encoder=True,avg=False,depth_decoder=1
-                                                        ,audioset_only=False,audioset_pretrain=True,imagenet_pretrain=True,
+        audio_model = attention_linearv2.attention_linear_model(depth_encoder=nb_enc_layers,depth_trainable=depth_trainable, trainable_encoder=True,avg=False,depth_decoder=1
+                                                        ,audioset_only=False,audioset_pretrain= True,imagenet_pretrain=True,
                                                               tiny=False,dropout_decoder=0)
 
         model_title = "attention_linear"
-
 
         if server:
             input_base_directory = "../../dev_data_dataframes_server/"
@@ -280,14 +307,17 @@ for i in range(len(versions)):
 
 
 
-        lr_encoder = 0.00005
-        lr_decoder = 0.0001
+        #lr_encoder = 0.00005
+        #lr_decoder = 0.0001
 
-        batch_size=64  #128 makes gpu go out of memory
+        #orig
+        lr_encoder = 0.000005
+        #lr_decoder = 0.000005
+
         #version = "B.6"
 
         train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=5,n_epochs=200,verbose=True,
-              debug=False,machine=machine)
+              debug=False,machine=machine, warmup=True)
         print(machine + " done")
 
 

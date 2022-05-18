@@ -34,3 +34,5 @@ ASTAE/src/AMINO/modules/
 ASTAE/src/garbage_runs/
 
 /dev_data_embeddings_5layers
+
+*.0

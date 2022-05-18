@@ -132,6 +132,8 @@ class Encoder(nn.Module):
 
     def __init__(self,depth_encoder,vit,trainable_encoder,avg=False,depth_trainable=0):
         super().__init__()
+        if depth_trainable == 0:
+            trainable_encoder=False
         if avg:
             averaged_encoder = copy.deepcopy(vit.blocks[0])
             average_layers(averaged_encoder,vit.blocks)
@@ -188,7 +190,7 @@ class attention_linear_model(nn.Module):
         print(device)
 
         super(attention_linear_model, self).__init__()
-        assert timm.__version__ == '0.4.5', 'From AST model, not sure if really necessary'  # AST
+#        assert timm.__version__ == '0.4.5', 'From AST model, not sure if really necessary'  # AST
 
 
 
@@ -220,7 +222,6 @@ class attention_linear_model(nn.Module):
         #self.AST_model.v.to(device)
         self.patch_embed = self.AST_model.v.patch_embed
         self.patch_embed.requires_grad_(False)  # first prototype lin projection layer is untrained
-        temp = self.AST_model.v.pos_embed
         self.pos_embed = nn.Parameter(self.AST_model.v.pos_embed[:,:-2,:]) # -2 as the model doesn't use distillation or class token
         #self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, self.embed_dim))  # ViT
         self.pos_embed.requires_grad_(False)
