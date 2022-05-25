@@ -35,6 +35,8 @@ Some parts are taken from AST: https://github.com/YuanGongND/ast
     especially (initial) hyper parameters
     parts copied from AST are annotated with #AST
 """
+#device = 'cpu'
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def custom_plot(epochs, loss,figname,debug):
     plt.plot(epochs, loss)
@@ -43,16 +45,15 @@ def custom_plot(epochs, loss,figname,debug):
     else:
         plt.savefig("results/"+figname+".png")
 
-def calc_AUC(X,labels,loss_fn,source,log=True,tb=None,epoch=None,debug=False,max_fpr=0.1,device='cuda'):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def calc_AUC(X,labels,loss_fn,source,log=True,tb=None,epoch=None,debug=False,max_fpr=0.1,device=device):
     if log and tb==None:
         raise Exception("no tensorboard to log to given")
     mse = []
     for sample in X:
         with autocast():
             sample = torch.unsqueeze(sample, dim=0)
-            if device == "cuda":
-                sample=sample.to(device)
+            #if device == "cuda":
+            sample=sample.to(device)
             sample_output,sample_lin_proj_output = audio_model(sample.detach())
             sample_output = sample_output.detach()
             sample_lin_proj_output = sample_lin_proj_output.detach()
@@ -65,7 +66,7 @@ def calc_AUC(X,labels,loss_fn,source,log=True,tb=None,epoch=None,debug=False,max
         if source:
             label = 'source'
         tb.add_scalar('AUC_scores/'+label, auc, epoch)
-        tb.add_scalar('pAUC_scores/'+label, pauc)
+        tb.add_scalar('pAUC_scores/'+label, pauc,epoch)
     return mse,auc,pauc
 
 def generate_roc_curve(y,labels,title):
@@ -75,17 +76,17 @@ def generate_roc_curve(y,labels,title):
 
 
 def train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,machine,
-          lr_patience=10,n_epochs=1,verbose=True,debug=False,warmup=True):
+          lr_patience=10,n_epochs=1,verbose=True,debug=False,warmup=True,shuffle=True):
 
 
 
 
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     print('running on ' + str(device))
     torch.set_grad_enabled(True)
 
-    audio_model = audio_model.to(device)
+    audio_model = audio_model.to(device) #!!!
 
     # Set up the optimizer #AST
     trainables_encoder = [p for p in audio_model.encoder.parameters() if p.requires_grad]
@@ -100,7 +101,11 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
         {'params': trainables_decoder, 'lr': lr_decoder}], betas=(0.95, 0.999)
     ) #AST
 
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [2,3,4,5], gamma=0.5, last_epoch=-1)
+    if warmup:
+        scheduler = warmup_scheduler.WarmupLR(optimizer,warmup_steps=10)
+    else:
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [2,3,4,5], gamma=0.5, last_epoch=-1)
+
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.7, patience=lr_patience,
             #threshold=0.01, threshold_mode='abs',verbose=verbose) #AST
     #scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [25,60,100,150], gamma=0.5, last_epoch=-1) #AST
@@ -147,7 +152,7 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
         X_validation_source_labels = X_validation_source_labels[:6]
         X_validation_target = X_validation_target[:6]
         X_validation_target_labels = X_validation_target_labels[:6]
-    X_train.to(device, non_blocking=True)
+    X_train.to(device, non_blocking=True) #!!
     X_validation_source.to(device, non_blocking=True)
     X_validation_target.to(device, non_blocking=True)
 
@@ -163,19 +168,23 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
 
 
-
+    torch.cuda.empty_cache() #!!!!
     tb = SummaryWriter(log_folder+title)
-    sample_input = X_train[0:batch_size]
-    sample_input=sample_input.to(device)
-    tb.add_graph(audio_model,sample_input)
+    #sample_input = X_train[0:batch_size]
+    #sample_input=sample_input.to(device) #!
 
-    audio_model = torch.nn.DataParallel(audio_model)
+    #tb.add_graph(audio_model,sample_input)
+
+    #audio_model = torch.nn.DataParallel(audio_model)
 
 
     train_loss_vals=  []
     epoch = 1
+    if debug:
+        n_epochs = 5
     while epoch < n_epochs:
-        X_train=X_train[torch.randperm(X_train.size()[0])]
+        if shuffle:
+            X_train=X_train[torch.randperm(X_train.size()[0])]
         print('---------------')
         print(datetime.datetime.now())
         print("current #epochs=%s, #steps=%s" % (epoch, global_step))
@@ -193,7 +202,7 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
                 X_batch = X_train[pos:]
             else:
                 X_batch = X_train[pos:pos + batch_size]
-            X_batch=X_batch.to(device, non_blocking=True)
+            X_batch=X_batch.to(device, non_blocking=True) #!!!
 #            labels = labels.to(device, non_blocking=True)
 #                audio_model = audio_model.to(device)
             with autocast():
@@ -223,9 +232,8 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
         mse_source,auc_source,pauc_source = calc_AUC(X_validation_source,X_validation_source_labels,loss_fn,True,log=True,tb=tb,epoch=epoch,debug=debug)
         mse_target,auc_target,pauc_target= calc_AUC(X_validation_target,X_validation_target_labels,loss_fn,False,log=True,tb=tb,epoch=epoch,debug=debug)
-
-        if epoch%50==0 and not debug:
-            torch.save(audio_model.state_dict(), "trained_models/intermediate_results/"+title+"_intermediate_"+str(epoch)+".pt")
+        #if epoch%50==0 and not debug:
+        #    torch.save(audio_model.state_dict(), "trained_models/intermediate_results/"+title+"_intermediate_"+str(epoch)+".pt")
 
         epoch += 1
 
@@ -239,8 +247,8 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
     if not debug:
         torch.save(audio_model.state_dict(), "trained_models/"+title+".pt")
 
-    generate_roc_curve(mse_source,X_validation_source_labels,title+"_source")
-    generate_roc_curve(mse_target,X_validation_target_labels,title+"_target")
+    #generate_roc_curve(mse_source,X_validation_source_labels,title+"_source")
+    #generate_roc_curve(mse_target,X_validation_target_labels,title+"_target")
 
 
     tb.close()
@@ -254,33 +262,36 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
 
 
-server = True
-#version = "init2"
+server = False
+version = "init2"
 
 nb_enc_layers = 3
 depth_trainable = 1
 lr_decoder = 0.000005
-batch_size=16  #128 makes gpu go out of memory
-
+batch_size=32
+#batch_size=32  #128 makes gpu go out of memory
+n_epochs=400
+depth_decoder=1
 
 warmup = True
 
-versions = ['permut']
-#lrs = [0.0001]
 
-#versions = ['batch32','batch64','batch128']
-#batch_sizes = [32,64,128]
-
+versions = ['Pdtrain0','Pdtrain1']
+depths = [0,1]
 
 for i in range(len(versions)):
     version = versions[i]
-    #lr_decoder = lrs[i]
+    depth_trainable=depths[i]
 
 
-#versions = ["layers.1","layers.2","layers.3","layers.4","layers.5"]
-#layers = [5,8,3,2,4]
-#depths = [1,2,3,4,5]
 
+
+
+    #versions = ["layers.1","layers.2","layers.3","layers.4","layers.5"]
+    #layers = [5,8,3,2,4]
+    #depths = [1,2,3,4,5]
+
+    #pump wrong
 
     #for machine in ["pump","ToyCar"]:
     for machine in ["gearbox"]:
@@ -294,9 +305,9 @@ for i in range(len(versions)):
         #audio_model = attention_linear.attention_linear_model(depth_encoder=1,depth_trainable=1, trainable_encoder=True,avg=False,depth_decoder=1
         #                                                ,audioset_only=False,audioset_pretrain=False,imagenet_pretrain=False,
         #                                                      tiny=False)
-        audio_model = attention_linearv2.attention_linear_model(depth_encoder=nb_enc_layers,depth_trainable=depth_trainable, trainable_encoder=True,avg=False,depth_decoder=1
-                                                        ,audioset_only=False,audioset_pretrain= True,imagenet_pretrain=True,
-                                                              tiny=False,dropout_decoder=0)
+        audio_model = attention_linearv2.attention_linear_model(depth_encoder=nb_enc_layers,depth_trainable=depth_trainable, trainable_encoder=True,avg=False,depth_decoder=depth_decoder
+                                                        ,audioset_only=False,audioset_pretrain= False,imagenet_pretrain=True,
+                                                              tiny=False,dropout_decoder=0,device=device)
 
         model_title = "attention_linear"
 
@@ -316,22 +327,8 @@ for i in range(len(versions)):
 
         #version = "B.6"
 
-        train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=5,n_epochs=200,verbose=True,
-              debug=False,machine=machine, warmup=True)
+        train(version,model_title,audio_model, input_base_directory, batch_size, lr_encoder,lr_decoder,lr_patience=5,n_epochs=n_epochs,verbose=True,
+              debug=False,machine=machine, warmup=warmup,shuffle=True)
         print(machine + " done")
 
 
-"""
-input_base_directory = "../../dev_data_dataframes/"
-
-
-dataframe_dir = input_base_directory + "pump"+"/"
-
-temp = dataframe_dir+"train/dataframe.pt"
-
-temp_test = X_train = torch.load(temp)
-
-print(len(temp_test))
-"""
-
-#plot_loss([1, 2, 3, 4, 5], [100, 90, 60, 30, 10],figname="test")

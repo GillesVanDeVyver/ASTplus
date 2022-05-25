@@ -15,14 +15,14 @@ import copy
 import collections
 
 
-def pretrained_AST(input_tdim = 1024, audioset_only = False,audioset_pretrain=True,imagenet_pretrain=True,tiny=False):
+def pretrained_AST(input_tdim = 1024, audioset_only = False,audioset_pretrain=True,imagenet_pretrain=True,tiny=False,device='cuda'):
     pretrained_mdl_path = '../../pretrained_models/audioset_10_10_0.4593.pth'
     # get the frequency and time stride of the pretrained model from its name
     fstride, tstride = int(pretrained_mdl_path.split('/')[-1].split('_')[1]), int(pretrained_mdl_path.split('/')[-1].split('_')[2].split('.')[0])
     # initialize an AST model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #device = "cpu"
-    print("device: "+ str(device))
+    #print("device: "+ str(device))
     #sd = torch.load(pretrained_mdl_path, map_location=device)
     #audio_model_ast = ast_model.ASTModel(input_tdim=input_tdim, fstride=fstride, tstride=tstride,model_size='tiny224')
     #if audioset_only:
@@ -143,7 +143,7 @@ class Encoder(nn.Module):
 
         if trainable_encoder:
             self.encoderBlocks[-depth_trainable:].requires_grad_(True)
-        self.vit = vit
+        self.norm = vit.norm
 
 
 
@@ -151,7 +151,7 @@ class Encoder(nn.Module):
     def forward(self, x):
         for blk in self.encoderBlocks: #AST
             x = blk(x) #AST
-        x = self.vit.norm(x) #AST
+        x = self.norm(x) #AST
         return x
 
 
@@ -183,10 +183,10 @@ class attention_linear_model(nn.Module):
 
     def __init__(self, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, depth_encoder=1,depth_trainable=1,
                  depth_decoder=1,verbose=True, trainable_encoder = False,avg=False,audioset_only=False,
-                 audioset_pretrain=True,imagenet_pretrain=True,tiny=False,dropout_decoder = 0):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                 audioset_pretrain=True,imagenet_pretrain=True,tiny=False,dropout_decoder = 0,device='cuda'):
+        #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #device = "cpu"
-
+        print("dev")
         print(device)
 
         super(attention_linear_model, self).__init__()
@@ -216,7 +216,7 @@ class attention_linear_model(nn.Module):
         # the linear projection layer
         print("device: "+ str(device))
         self.AST_model = pretrained_AST(audioset_only=audioset_only,audioset_pretrain=audioset_pretrain,imagenet_pretrain=imagenet_pretrain,
-                                        tiny=tiny)
+                                        tiny=tiny,device=device)
         self.AST_model.requires_grad_(False)
         print("device: "+ str(device))
         #self.AST_model.v.to(device)
