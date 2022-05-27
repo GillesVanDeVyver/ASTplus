@@ -153,8 +153,8 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
         X_validation_target = X_validation_target[:6]
         X_validation_target_labels = X_validation_target_labels[:6]
     X_train.to(device, non_blocking=True) #!!
-    X_validation_source.to(device, non_blocking=True)
-    X_validation_target.to(device, non_blocking=True)
+    #X_validation_source.to(device, non_blocking=True)
+    #X_validation_target.to(device, non_blocking=True)
 
 
     nb_batches = round(len(X_train)/batch_size)
@@ -168,7 +168,6 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
 
 
-    torch.cuda.empty_cache() #!!!!
     tb = SummaryWriter(log_folder+title)
     #sample_input = X_train[0:batch_size]
     #sample_input=sample_input.to(device) #!
@@ -196,7 +195,7 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
         audio_model.train()
         for i in range(nb_batches):
-            if (i%100 == 0):
+            if (i%10 == 0):
                 print(i)
             if (pos + batch_size>len(X_train)):
                 X_batch = X_train[pos:]
@@ -232,8 +231,8 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
         mse_source,auc_source,pauc_source = calc_AUC(X_validation_source,X_validation_source_labels,loss_fn,True,log=True,tb=tb,epoch=epoch,debug=debug)
         mse_target,auc_target,pauc_target= calc_AUC(X_validation_target,X_validation_target_labels,loss_fn,False,log=True,tb=tb,epoch=epoch,debug=debug)
-        #if epoch%50==0 and not debug:
-        #    torch.save(audio_model.state_dict(), "trained_models/intermediate_results/"+title+"_intermediate_"+str(epoch)+".pt")
+        if epoch%50==0 and not debug:
+            torch.save(audio_model.state_dict(), "trained_models/intermediate_results/"+title+"_intermediate_"+str(epoch)+".pt")
 
         epoch += 1
 
@@ -262,7 +261,7 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
 
 
-server = False
+server = True
 version = "init2"
 
 nb_enc_layers = 3
@@ -276,12 +275,10 @@ depth_decoder=1
 warmup = True
 
 
-versions = ['Pdtrain0','Pdtrain1']
-depths = [0,1]
+versions = ['tiny32']
 
 for i in range(len(versions)):
     version = versions[i]
-    depth_trainable=depths[i]
 
 
 
@@ -306,8 +303,8 @@ for i in range(len(versions)):
         #                                                ,audioset_only=False,audioset_pretrain=False,imagenet_pretrain=False,
         #                                                      tiny=False)
         audio_model = attention_linearv2.attention_linear_model(depth_encoder=nb_enc_layers,depth_trainable=depth_trainable, trainable_encoder=True,avg=False,depth_decoder=depth_decoder
-                                                        ,audioset_only=False,audioset_pretrain= False,imagenet_pretrain=True,
-                                                              tiny=False,dropout_decoder=0,device=device)
+                                                        ,audioset_only=False,audioset_pretrain= True,imagenet_pretrain=True,
+                                                              tiny=True,dropout_decoder=0,device=device)
 
         model_title = "attention_linear"
 
