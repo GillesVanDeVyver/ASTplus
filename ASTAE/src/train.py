@@ -231,8 +231,8 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
         mse_source,auc_source,pauc_source = calc_AUC(X_validation_source,X_validation_source_labels,loss_fn,True,log=True,tb=tb,epoch=epoch,debug=debug)
         mse_target,auc_target,pauc_target= calc_AUC(X_validation_target,X_validation_target_labels,loss_fn,False,log=True,tb=tb,epoch=epoch,debug=debug)
-        if epoch%50==0 and not debug:
-            torch.save(audio_model.state_dict(), "trained_models/intermediate_results/"+title+"_intermediate_"+str(epoch)+".pt")
+        #if epoch%50==0 and not debug:
+        #    torch.save(audio_model.state_dict(), "trained_models/intermediate_results/"+title+"_intermediate_"+str(epoch)+".pt")
 
         epoch += 1
 
@@ -262,10 +262,10 @@ def train(version,model_title,audio_model, input_base_directory, batch_size, lr_
 
 
 server = True
-version = "init2"
+version = "no version"
 
 nb_enc_layers = 3
-depth_trainable = 1
+depth_trainable = 3
 lr_decoder = 0.000005
 batch_size=32
 #batch_size=32  #128 makes gpu go out of memory
@@ -275,10 +275,14 @@ depth_decoder=1
 warmup = True
 
 
-versions = ['tiny32']
+versions = ['32finalv2']
+depths1=[12]
+depths2=[12]
 
 for i in range(len(versions)):
     version = versions[i]
+    #nb_enc_layers=depths1[i]
+    #depth_trainable=depths2[i]
 
 
 
@@ -290,8 +294,8 @@ for i in range(len(versions)):
 
     #pump wrong
 
-    #for machine in ["pump","ToyCar"]:
     for machine in ["gearbox"]:
+    #for machine in ["gearbox"]:
 
         #versions = ["20,2","21,2","22,2","23,2","24,2"]
         #for i in range(len(versions)):
@@ -304,7 +308,7 @@ for i in range(len(versions)):
         #                                                      tiny=False)
         audio_model = attention_linearv2.attention_linear_model(depth_encoder=nb_enc_layers,depth_trainable=depth_trainable, trainable_encoder=True,avg=False,depth_decoder=depth_decoder
                                                         ,audioset_only=False,audioset_pretrain= True,imagenet_pretrain=True,
-                                                              tiny=True,dropout_decoder=0,device=device)
+                                                              tiny=False,dropout_decoder=0,device=device)
 
         model_title = "attention_linear"
 

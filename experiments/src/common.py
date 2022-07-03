@@ -229,7 +229,8 @@ def file_to_vectors(file_name,
                     n_fft=1024,
                     hop_length=512,
                     power=2.0,
-                    flatten=True):
+                    flatten=True,
+                    log_mel=True):
     """
     convert file_name to a vector array.
 
@@ -245,15 +246,19 @@ def file_to_vectors(file_name,
 
     # generate melspectrogram using librosa
     y, sr = file_load(file_name, mono=True)
-    mel_spectrogram = librosa.feature.melspectrogram(y=y,
-                                                     sr=sr,
-                                                     n_fft=n_fft,
-                                                     hop_length=hop_length,
-                                                     n_mels=n_mels,
-                                                     power=power)
-
+    if log_mel:
+        spectrogram = librosa.feature.melspectrogram(y=y,
+                                                         sr=sr,
+                                                         n_fft=n_fft,
+                                                         hop_length=hop_length,
+                                                         n_mels=n_mels,
+                                                         power=power)
+    else:
+        spectrogram =librosa.stft(y=y,
+                                                         n_fft=n_fft,
+                                                         hop_length=hop_length)
     # convert melspectrogram to log mel energies
-    log_mel_spectrogram = 20.0 / power * np.log10(np.maximum(mel_spectrogram, sys.float_info.epsilon))
+    log_mel_spectrogram = 20.0 / power * np.log10(np.maximum(spectrogram, sys.float_info.epsilon))
 
     if flatten:
         # calculate total vector size

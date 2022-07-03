@@ -38,7 +38,7 @@ file_location=os.path.join("../dev_data/gearbox/target_test/"+sample_name+".wav"
 
 
 
-def convert_to_spectrogram_and_save(file_location,output_location):
+def convert_to_spectrogram_and_save(file_location,output_location,log_mel=True):
 
     vectors = com.file_to_vectors(file_location,
                                   n_mels=param["feature"]["n_mels"],
@@ -55,7 +55,8 @@ def convert_to_spectrogram_and_save(file_location,output_location):
                                   n_fft=param["feature"]["n_fft"],
                                   hop_length=param["feature"]["hop_length"],
                                   power=param["feature"]["power"],
-                                  flatten=False)
+                                  flatten=False,
+                                  log_mel=log_mel)
     #print(log_mel_spectrogram[0][0])
     #print(np.shape(log_mel_spectrogram))
 

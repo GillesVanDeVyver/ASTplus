@@ -152,8 +152,8 @@ def file_to_vectors(file_name,
     vectors = np.zeros((n_vectors, dims))
     for t in range(n_frames):
         vectors[:, n_mels * t : n_mels * (t + 1)] = log_mel_spectrogram[:, t : t + n_vectors].T
-        #temp = vectors.T
-        #temp2=temp[128:]
+        #temp.txt = vectors.T
+        #temp2=temp.txt[128:]
 
     return vectors
 
