@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-The following paper shall be cited when to using, copying, modifying, mergeing, publishing, distributing, sublicensing, and/or selling
+The following proceeding shall be cited when using, copying, modifying, mergeing, publishing, distributing, sublicensing, and/or selling
 copies of the Software:
-Van De Vyver, Gilles, et al. "Regional quality estimation for echocardiography using deep learning." arXiv preprint arXiv:2408.00591 (2024). https://arxiv.org/abs/2408.00591
-
+G. Van De Vyver, Z. Liu, K. Dolui, D. Hughes and S. Michiels, "Adapted Spectrogram Transformer for Unsupervised Cross-Domain Acoustic Anomaly Detection," 2022 Asia-Pacific Signal and Information Processing Association Annual Summit and Conference (APSIPA ASC), Chiang Mai, Thailand, 2022, pp. 890-896, doi: 10.23919/APSIPAASC55919.2022.9980266.
+keywords: {Adaptation models;Visualization;Transfer learning;Transformers;Feature extraction;Acoustics;Data models},
